@@ -1,0 +1,220 @@
+import Database from "better-sqlite3";
+import bcrypt from "bcryptjs";
+import path from "path";
+import fs from "fs";
+
+const dataDir = path.join(process.cwd(), "data");
+if (!fs.existsSync(dataDir)) {
+  fs.mkdirSync(dataDir, { recursive: true });
+}
+
+const dbPath = path.join(dataDir, "property-manager.db");
+const db = new Database(dbPath);
+db.pragma("journal_mode = WAL");
+db.pragma("foreign_keys = ON");
+
+// Create tables
+db.exec(`
+  CREATE TABLE IF NOT EXISTS admins (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    name TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS properties (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    address1 TEXT NOT NULL,
+    city TEXT NOT NULL,
+    state TEXT NOT NULL,
+    zip TEXT NOT NULL,
+    monthly_rent REAL NOT NULL,
+    security_deposit REAL NOT NULL,
+    lease_type TEXT NOT NULL DEFAULT 'fixed',
+    status TEXT NOT NULL DEFAULT 'available',
+    lease_terms_summary TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS prescreenings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    property_id INTEGER REFERENCES properties(id),
+    full_name TEXT NOT NULL,
+    phone TEXT NOT NULL,
+    email TEXT NOT NULL,
+    date_of_birth TEXT,
+    current_address TEXT,
+    desired_move_in TEXT NOT NULL,
+    adults_count INTEGER NOT NULL,
+    children_count INTEGER NOT NULL DEFAULT 0,
+    occupant_names TEXT,
+    monthly_income REAL NOT NULL,
+    credit_score_range TEXT NOT NULL,
+    employment_status TEXT NOT NULL,
+    employer_name TEXT,
+    job_title TEXT,
+    employment_length TEXT,
+    income_sources TEXT,
+    can_provide_proof_of_income INTEGER NOT NULL,
+    meets_income_requirement INTEGER NOT NULL,
+    can_pay_move_in INTEGER NOT NULL,
+    late_payments INTEGER NOT NULL DEFAULT 0,
+    late_payments_explanation TEXT,
+    housing_status TEXT NOT NULL,
+    current_landlord_name TEXT,
+    current_landlord_phone TEXT,
+    current_rent REAL,
+    current_address_duration TEXT,
+    has_rented_before INTEGER,
+    prior_eviction INTEGER NOT NULL,
+    eviction_explanation TEXT,
+    broken_lease INTEGER NOT NULL DEFAULT 0,
+    asked_to_move_out INTEGER NOT NULL DEFAULT 0,
+    landlord_debt INTEGER NOT NULL,
+    property_damage_history INTEGER NOT NULL DEFAULT 0,
+    rental_history_explanation TEXT,
+    has_pets INTEGER NOT NULL,
+    pets_json TEXT,
+    smoking INTEGER NOT NULL,
+    willing_to_maintain INTEGER NOT NULL,
+    willing_to_handle_utilities INTEGER NOT NULL,
+    intent_to_sublease INTEGER NOT NULL,
+    intent_to_airbnb INTEGER NOT NULL,
+    full_time_residence INTEGER NOT NULL,
+    violent_crime INTEGER NOT NULL DEFAULT 0,
+    property_crime INTEGER NOT NULL DEFAULT 0,
+    background_explanation TEXT,
+    screening_consent INTEGER NOT NULL,
+    move_reason TEXT,
+    additional_notes TEXT,
+    score INTEGER,
+    status TEXT NOT NULL DEFAULT 'new',
+    admin_notes TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS tenants (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    property_id INTEGER REFERENCES properties(id),
+    full_name TEXT NOT NULL,
+    email TEXT,
+    phone TEXT,
+    move_in_date TEXT,
+    move_out_date TEXT,
+    monthly_rent REAL NOT NULL,
+    deposit_required REAL NOT NULL,
+    deposit_paid REAL NOT NULL DEFAULT 0,
+    lease_status TEXT NOT NULL DEFAULT 'active',
+    notes TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS lease_terms (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    property_id INTEGER NOT NULL REFERENCES properties(id),
+    lease_start TEXT,
+    lease_end TEXT,
+    monthly_rent REAL NOT NULL,
+    late_fee_rule TEXT,
+    security_deposit REAL,
+    pets_allowed INTEGER DEFAULT 0,
+    pet_fee REAL,
+    pet_rent REAL,
+    utilities_terms TEXT,
+    maintenance_terms TEXT,
+    smoking_terms TEXT,
+    showing_notice_terms TEXT,
+    special_terms TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS payments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+    property_id INTEGER NOT NULL REFERENCES properties(id),
+    due_date TEXT NOT NULL,
+    amount_due REAL NOT NULL,
+    amount_paid REAL NOT NULL DEFAULT 0,
+    payment_date TEXT,
+    payment_method TEXT,
+    status TEXT NOT NULL DEFAULT 'unpaid',
+    late_fee REAL DEFAULT 0,
+    notes TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS deposits (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+    property_id INTEGER NOT NULL REFERENCES properties(id),
+    deposit_required REAL NOT NULL,
+    deposit_paid REAL NOT NULL DEFAULT 0,
+    paid_date TEXT,
+    refund_amount REAL,
+    refund_date TEXT,
+    deductions TEXT,
+    notes TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS maintenance_requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    property_id INTEGER REFERENCES properties(id),
+    tenant_name TEXT NOT NULL,
+    tenant_phone TEXT,
+    tenant_email TEXT,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL,
+    category TEXT NOT NULL,
+    priority TEXT NOT NULL DEFAULT 'medium',
+    status TEXT NOT NULL DEFAULT 'open',
+    admin_notes TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+`);
+
+// Seed admin user
+const adminEmail = "admin@propertymanager.com";
+const adminPassword = "admin123";
+const hash = bcrypt.hashSync(adminPassword, 12);
+
+const existing = db.prepare("SELECT id FROM admins WHERE email = ?").get(adminEmail);
+if (!existing) {
+  db.prepare("INSERT INTO admins (email, password_hash, name) VALUES (?, ?, ?)").run(
+    adminEmail,
+    hash,
+    "Admin"
+  );
+  console.log(`Admin user created: ${adminEmail} / ${adminPassword}`);
+} else {
+  console.log("Admin user already exists");
+}
+
+// Seed a sample property
+const existingProp = db.prepare("SELECT id FROM properties LIMIT 1").get();
+if (!existingProp) {
+  db.prepare(`INSERT INTO properties (name, address1, city, state, zip, monthly_rent, security_deposit, status)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(
+    "Main Street Rental",
+    "123 Main Street",
+    "Springfield",
+    "IL",
+    "62701",
+    1250,
+    1250,
+    "available"
+  );
+  console.log("Sample property created");
+}
+
+console.log("Seed complete!");
+db.close();
