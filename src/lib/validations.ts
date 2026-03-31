@@ -6,6 +6,7 @@ export const loginSchema = z.object({
 });
 
 export const prescreeningSchema = z.object({
+  propertyId: z.coerce.number().optional(),
   fullName: z.string().min(2, "Full legal name required"),
   phone: z.string().min(10, "Valid phone number required"),
   email: z.string().email("Valid email required"),
@@ -15,6 +16,9 @@ export const prescreeningSchema = z.object({
   adultsCount: z.coerce.number().min(1, "At least 1 adult"),
   childrenCount: z.coerce.number().min(0).default(0),
   occupantNames: z.string().optional(),
+  preferredContactMethod: z.string().optional(),
+  showingAvailability: z.string().optional(),
+  howHeardAbout: z.string().optional(),
   monthlyIncome: z.coerce.number().min(0, "Income required"),
   creditScoreRange: z.string().min(1, "Credit score range required"),
   employmentStatus: z.string().min(1, "Employment status required"),
@@ -30,7 +34,7 @@ export const prescreeningSchema = z.object({
   housingStatus: z.string().min(1, "Current housing status required"),
   currentLandlordName: z.string().optional(),
   currentLandlordPhone: z.string().optional(),
-  currentRent: z.coerce.number().optional(),
+  currentHousingPayment: z.coerce.number().optional(),
   currentAddressDuration: z.string().optional(),
   hasRentedBefore: z.coerce.boolean().optional(),
   priorEviction: z.coerce.boolean(),
@@ -40,6 +44,8 @@ export const prescreeningSchema = z.object({
   landlordDebt: z.coerce.boolean(),
   propertyDamageHistory: z.coerce.boolean().default(false),
   rentalHistoryExplanation: z.string().optional(),
+  allAdultsWillingToScreen: z.coerce.boolean().optional(),
+  creditIssuesDisclosure: z.string().optional(),
   hasPets: z.coerce.boolean(),
   petsJson: z.string().optional(),
   smoking: z.coerce.boolean(),
@@ -48,9 +54,7 @@ export const prescreeningSchema = z.object({
   intentToSublease: z.coerce.boolean(),
   intentToAirbnb: z.coerce.boolean(),
   fullTimeResidence: z.coerce.boolean(),
-  violentCrime: z.coerce.boolean().default(false),
-  propertyCrime: z.coerce.boolean().default(false),
-  backgroundExplanation: z.string().optional(),
+  backgroundDisclosure: z.string().optional(),
   screeningConsent: z.coerce.boolean(),
   moveReason: z.string().optional(),
   additionalNotes: z.string().optional(),
@@ -136,6 +140,13 @@ export const leaseTermsSchema = z.object({
 });
 
 // Prescreening scoring
+// Mirrors non-negotiable lease standards:
+//   - Credit 675+
+//   - Income >= 2.75x rent ($3,437.50 for $1,250 rent)
+//   - Move-in funds available
+//   - No subleasing / Airbnb
+//   - Willingness to complete paid screening
+//   - Pets case-by-case
 const INCOME_THRESHOLD = 3437.50;
 
 export function scorePrescreening(data: z.infer<typeof prescreeningSchema>): {
@@ -185,16 +196,20 @@ export function scorePrescreening(data: z.infer<typeof prescreeningSchema>): {
   if (data.screeningConsent) score += 10;
   else reasons.push("Refuses background/credit screening");
 
-  // Property use (0-10 points)
+  // All adults willing to screen (0-5 points)
+  if (data.allAdultsWillingToScreen) score += 5;
+  else if (data.allAdultsWillingToScreen === false) reasons.push("Not all adults willing to screen");
+
+  // Property use (0-5 points)
   if (data.fullTimeResidence && !data.intentToSublease && !data.intentToAirbnb) {
-    score += 10;
+    score += 5;
   } else {
     if (data.intentToSublease) reasons.push("Intends to sublease");
     if (data.intentToAirbnb) reasons.push("Intends to use for Airbnb");
     if (!data.fullTimeResidence) reasons.push("Not full-time residence");
   }
 
-  // Auto-reject triggers
+  // Auto-reject triggers (non-negotiable lease standards)
   const autoReject =
     ["650-674", "below-650"].includes(data.creditScoreRange) ||
     data.monthlyIncome < INCOME_THRESHOLD ||

@@ -12,7 +12,7 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog"
-import { PlusIcon, PencilIcon, TrashIcon } from "lucide-react"
+import { PlusIcon, PencilIcon, TrashIcon, LinkIcon, CopyIcon } from "lucide-react"
 
 interface Tenant {
   id: string
@@ -20,6 +20,7 @@ interface Tenant {
   fullName: string
   email: string
   phone: string
+  accessToken: string
   moveInDate: string
   moveOutDate: string
   monthlyRent: number
@@ -34,7 +35,7 @@ interface Property {
   name: string
 }
 
-const emptyTenant: Omit<Tenant, "id"> = {
+const emptyTenant: Omit<Tenant, "id" | "accessToken"> = {
   propertyId: "", fullName: "", email: "", phone: "",
   moveInDate: "", moveOutDate: "", monthlyRent: 0,
   depositRequired: 0, depositPaid: 0, leaseStatus: "active", notes: "",
@@ -66,7 +67,7 @@ export default function TenantsPage() {
   const [error, setError] = useState("")
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Tenant | null>(null)
-  const [form, setForm] = useState(emptyTenant)
+  const [form, setForm] = useState<Omit<Tenant, "id" | "accessToken">>(emptyTenant)
   const [saving, setSaving] = useState(false)
 
   async function loadData() {
@@ -181,6 +182,7 @@ export default function TenantsPage() {
                 <TableHead className="hidden md:table-cell">Rent</TableHead>
                 <TableHead>Deposit</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead className="hidden lg:table-cell">Maintenance Link</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -209,6 +211,25 @@ export default function TenantsPage() {
                       <Badge variant="secondary" className={leaseStatusColors[t.leaseStatus] || ""}>
                         {t.leaseStatus}
                       </Badge>
+                    </TableCell>
+                    <TableCell className="hidden lg:table-cell">
+                      {t.leaseStatus === "active" && t.accessToken ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-1.5 text-xs"
+                          onClick={() => {
+                            const link = `${window.location.origin}/maintenance/${t.accessToken}`
+                            navigator.clipboard.writeText(link)
+                            alert("Maintenance link copied!")
+                          }}
+                        >
+                          <CopyIcon className="size-3" />
+                          Copy Link
+                        </Button>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">

@@ -4,6 +4,7 @@ import { prescreenings } from "@/db/schema";
 import { prescreeningSchema, scorePrescreening } from "@/lib/validations";
 import { desc } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
+import { sendEmail, prescreeningConfirmationEmail, prescreeningApprovedEmail, prescreeningRejectedEmail, prescreeningAdminNotification } from "@/lib/mailer";
 
 export async function POST(request: Request) {
   try {
@@ -22,10 +23,30 @@ export async function POST(request: Request) {
     const result = db.insert(prescreenings).values({
       ...data,
       petsJson: data.petsJson || null,
-      currentRent: data.currentRent ?? null,
+      currentHousingPayment: data.currentHousingPayment ?? null,
       score,
       status,
     }).returning().get();
+
+    // Send status-specific email to applicant
+    if (status === "pre-approved") {
+      const approved = prescreeningApprovedEmail(data.fullName);
+      sendEmail({ to: [{ email: data.email, name: data.fullName }], ...approved }).catch(console.error);
+    } else if (status === "rejected") {
+      const rejected = prescreeningRejectedEmail(data.fullName);
+      sendEmail({ to: [{ email: data.email, name: data.fullName }], ...rejected }).catch(console.error);
+    } else {
+      // "review" status — send generic confirmation
+      const confirmation = prescreeningConfirmationEmail(data.fullName);
+      sendEmail({ to: [{ email: data.email, name: data.fullName }], ...confirmation }).catch(console.error);
+    }
+
+    // Notify admin of every submission
+    const adminNotif = prescreeningAdminNotification(data.fullName, data.email, score, status);
+    sendEmail({
+      to: [{ email: "admin@propertymanager.com", name: "Admin" }],
+      ...adminNotif,
+    }).catch(console.error);
 
     return NextResponse.json({ success: true, id: result.id, score, status });
   } catch (e) {

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { ClipboardList, Wrench } from "lucide-react";
+import { ClipboardList } from "lucide-react";
 
 export default function Home() {
   return (
@@ -12,15 +12,14 @@ export default function Home() {
           Property Manager
         </h1>
         <p className="mt-4 max-w-xl text-lg text-muted-foreground sm:text-xl">
-          Professional property management made simple. Submit your application
-          or request maintenance below.
+          Professional property management made simple.
         </p>
 
-        <div className="mt-12 grid w-full max-w-2xl gap-6 sm:grid-cols-2">
+        <div className="mt-12 w-full max-w-md">
           <Link href="/apply" className="group">
             <Card className="h-full transition hover:ring-2 hover:ring-primary/30">
               <CardHeader>
-                <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10">
+                <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10 mx-auto">
                   <ClipboardList className="h-6 w-6" />
                 </div>
                 <CardTitle className="text-xl">Pre-screening Application</CardTitle>
@@ -36,27 +35,11 @@ export default function Home() {
               </CardContent>
             </Card>
           </Link>
-
-          <Link href="/maintenance" className="group">
-            <Card className="h-full transition hover:ring-2 hover:ring-primary/30">
-              <CardHeader>
-                <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10">
-                  <Wrench className="h-6 w-6" />
-                </div>
-                <CardTitle className="text-xl">Maintenance Request</CardTitle>
-                <CardDescription className="text-base">
-                  Current tenant? Submit a maintenance request and we will get
-                  back to you promptly.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Button variant="outline" className="w-full h-11 text-base">
-                  Submit Request
-                </Button>
-              </CardContent>
-            </Card>
-          </Link>
         </div>
+
+        <p className="mt-8 text-sm text-muted-foreground">
+          Current tenants: use the maintenance link provided by your property manager.
+        </p>
       </header>
 
       {/* Footer */}
