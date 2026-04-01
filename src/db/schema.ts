@@ -20,6 +20,8 @@ export const properties = sqliteTable("properties", {
   leaseType: text("lease_type").notNull().default("fixed"),
   status: text("status").notNull().default("available"),
   leaseTermsSummary: text("lease_terms_summary"),
+  aiAnalysis: text("ai_analysis"),
+  aiAnalysisDate: text("ai_analysis_date"),
   createdAt: text("created_at").notNull().$defaultFn(() => new Date().toISOString()),
   updatedAt: text("updated_at").notNull().$defaultFn(() => new Date().toISOString()),
 });

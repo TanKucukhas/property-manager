@@ -35,6 +35,8 @@ db.exec(`
     lease_type TEXT NOT NULL DEFAULT 'fixed',
     status TEXT NOT NULL DEFAULT 'available',
     lease_terms_summary TEXT,
+    ai_analysis TEXT,
+    ai_analysis_date TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
@@ -187,7 +189,7 @@ db.exec(`
 `);
 
 // Seed admin user
-const adminEmail = "admin@propertymanager.com";
+const adminEmail = "admin@local";
 const adminPassword = "admin123";
 const hash = bcrypt.hashSync(adminPassword, 12);
 

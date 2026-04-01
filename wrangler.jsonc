@@ -1,0 +1,22 @@
+{
+  "name": "property-manager",
+  "workers_dev": true,
+  "compatibility_date": "2025-04-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "main": ".open-next/worker.js",
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "routes": [
+    { "pattern": "cresiq.com", "custom_domain": true },
+    { "pattern": "www.cresiq.com", "custom_domain": true }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "property-manager-db",
+      "database_id": "0d011bf5-d02e-4bbf-8ca3-92beb4740206"
+    }
+  ]
+}

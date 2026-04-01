@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { getDb } from "@/lib/db";
 import { tenants, properties } from "@/db/schema";
 import { eq } from "drizzle-orm";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
+  const db = await getDb();
 
   const tenant = db.select({
     id: tenants.id,

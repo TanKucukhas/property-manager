@@ -38,6 +38,10 @@ yarn-error.log*
 # local database
 /data/
 
+# cloudflare build output
+.open-next/
+.wrangler/
+
 # vercel
 .vercel
 

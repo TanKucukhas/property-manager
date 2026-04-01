@@ -12,8 +12,8 @@ export async function sendEmail({
   to,
   subject,
   htmlContent,
-  senderName = "Property Manager",
-  senderEmail = "noreply@propertymanager.com",
+  senderName = "Cresiq Property Manager",
+  senderEmail = "hello@cresiq.com",
 }: SendEmailParams) {
   const apiKey = process.env.BREVO_API_KEY;
   if (!apiKey) {
@@ -45,22 +45,64 @@ export async function sendEmail({
   return res.json();
 }
 
-export function prescreeningConfirmationEmail(name: string) {
+// Build a summary of the applicant's submission for their records
+export interface ApplicationSummary {
+  fullName: string;
+  email: string;
+  phone: string;
+  desiredMoveIn: string;
+  adultsCount: number;
+  childrenCount: number;
+  employmentStatus: string;
+  monthlyIncome: number;
+  creditScoreRange: string;
+  housingStatus: string;
+  hasPets: boolean;
+  preferredContactMethod?: string;
+  showingAvailability?: string;
+}
+
+function buildSummaryBlock(s: ApplicationSummary): string {
+  const row = (label: string, value: string) =>
+    `<tr><td style="padding: 6px 8px; color: #666; white-space: nowrap;">${label}</td><td style="padding: 6px 8px;">${value}</td></tr>`;
+  return `
+    <div style="margin: 20px 0; padding: 16px; background: #f9f9f9; border-radius: 8px; border: 1px solid #eee;">
+      <p style="margin: 0 0 12px 0; font-weight: bold; font-size: 14px;">Your Submission Summary</p>
+      <table style="border-collapse: collapse; width: 100%; font-size: 13px;">
+        ${row("Name", s.fullName)}
+        ${row("Email", s.email)}
+        ${row("Phone", s.phone)}
+        ${row("Desired Move-in", s.desiredMoveIn)}
+        ${row("Adults / Children", `${s.adultsCount} / ${s.childrenCount}`)}
+        ${row("Employment", s.employmentStatus)}
+        ${row("Monthly Income", `$${s.monthlyIncome.toLocaleString()}`)}
+        ${row("Credit Score", s.creditScoreRange)}
+        ${row("Housing Status", s.housingStatus)}
+        ${row("Pets", s.hasPets ? "Yes" : "No")}
+        ${s.preferredContactMethod ? row("Contact Preference", s.preferredContactMethod) : ""}
+        ${s.showingAvailability ? row("Showing Availability", s.showingAvailability) : ""}
+      </table>
+    </div>`;
+}
+
+export function prescreeningConfirmationEmail(name: string, summary?: ApplicationSummary) {
   return {
-    subject: "Pre-Screening Application Received",
+    subject: "Pre-Screening Application Received — Your Copy",
     htmlContent: `
       <div style="font-family: Roboto, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px;">
         <h2 style="color: #1a1a1a;">Application Received</h2>
         <p>Hi ${name},</p>
         <p>Thank you for submitting your pre-screening application. We have received your information and will review it shortly.</p>
         <p>If your application meets our minimum requirements, we will reach out to schedule a showing and invite you to complete the formal screening process.</p>
-        <p style="margin-top: 24px; color: #666;">Property Manager</p>
+        ${summary ? buildSummaryBlock(summary) : ""}
+        <p style="font-size: 12px; color: #999;">Please keep this email for your records.</p>
+        <p style="margin-top: 24px; color: #666;">Cresiq Property Management</p>
       </div>
     `,
   };
 }
 
-export function prescreeningApprovedEmail(name: string) {
+export function prescreeningApprovedEmail(name: string, summary?: ApplicationSummary) {
   return {
     subject: "Next Step: Background & Credit Screening",
     htmlContent: `
@@ -84,13 +126,15 @@ export function prescreeningApprovedEmail(name: string) {
           <li><strong>Total: $2,500</strong></li>
         </ul>
         <p>If you have any questions, reply to this email or contact your property manager directly.</p>
-        <p style="margin-top: 24px; color: #666;">Property Manager</p>
+        ${summary ? buildSummaryBlock(summary) : ""}
+        <p style="font-size: 12px; color: #999;">Please keep this email for your records.</p>
+        <p style="margin-top: 24px; color: #666;">Cresiq Property Management</p>
       </div>
     `,
   };
 }
 
-export function prescreeningRejectedEmail(name: string) {
+export function prescreeningRejectedEmail(name: string, summary?: ApplicationSummary) {
   return {
     subject: "Pre-Screening Application Update",
     htmlContent: `
@@ -100,7 +144,9 @@ export function prescreeningRejectedEmail(name: string) {
         <p>Thank you for your interest and for taking the time to complete the pre-screening application.</p>
         <p>After reviewing your submission, we are unable to move forward with your application at this time based on the minimum qualification requirements for this property.</p>
         <p>We appreciate your time and wish you the best in your housing search.</p>
-        <p style="margin-top: 24px; color: #666;">Property Manager</p>
+        ${summary ? buildSummaryBlock(summary) : ""}
+        <p style="font-size: 12px; color: #999;">Please keep this email for your records.</p>
+        <p style="margin-top: 24px; color: #666;">Cresiq Property Management</p>
       </div>
     `,
   };

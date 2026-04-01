@@ -1,0 +1,173 @@
+-- Property Manager D1 Migration
+
+CREATE TABLE IF NOT EXISTS admins (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  email TEXT NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
+  name TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS properties (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  address1 TEXT NOT NULL,
+  city TEXT NOT NULL,
+  state TEXT NOT NULL,
+  zip TEXT NOT NULL,
+  monthly_rent REAL NOT NULL,
+  security_deposit REAL NOT NULL,
+  lease_type TEXT NOT NULL DEFAULT 'fixed',
+  status TEXT NOT NULL DEFAULT 'available',
+  lease_terms_summary TEXT,
+  ai_analysis TEXT,
+  ai_analysis_date TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS prescreenings (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  property_id INTEGER REFERENCES properties(id),
+  full_name TEXT NOT NULL,
+  phone TEXT NOT NULL,
+  email TEXT NOT NULL,
+  date_of_birth TEXT,
+  current_address TEXT,
+  desired_move_in TEXT NOT NULL,
+  adults_count INTEGER NOT NULL,
+  children_count INTEGER NOT NULL DEFAULT 0,
+  occupant_names TEXT,
+  preferred_contact_method TEXT,
+  showing_availability TEXT,
+  how_heard_about TEXT,
+  monthly_income REAL NOT NULL,
+  credit_score_range TEXT NOT NULL,
+  employment_status TEXT NOT NULL,
+  employer_name TEXT,
+  job_title TEXT,
+  employment_length TEXT,
+  income_sources TEXT,
+  can_provide_proof_of_income INTEGER NOT NULL,
+  meets_income_requirement INTEGER NOT NULL,
+  can_pay_move_in INTEGER NOT NULL,
+  late_payments INTEGER NOT NULL DEFAULT 0,
+  late_payments_explanation TEXT,
+  housing_status TEXT NOT NULL,
+  current_landlord_name TEXT,
+  current_landlord_phone TEXT,
+  current_housing_payment REAL,
+  current_address_duration TEXT,
+  has_rented_before INTEGER,
+  prior_eviction INTEGER NOT NULL,
+  eviction_explanation TEXT,
+  broken_lease INTEGER NOT NULL DEFAULT 0,
+  asked_to_move_out INTEGER NOT NULL DEFAULT 0,
+  landlord_debt INTEGER NOT NULL,
+  property_damage_history INTEGER NOT NULL DEFAULT 0,
+  rental_history_explanation TEXT,
+  all_adults_willing_to_screen INTEGER,
+  credit_issues_disclosure TEXT,
+  has_pets INTEGER NOT NULL,
+  pets_json TEXT,
+  smoking INTEGER NOT NULL,
+  willing_to_maintain INTEGER NOT NULL,
+  willing_to_handle_utilities INTEGER NOT NULL,
+  intent_to_sublease INTEGER NOT NULL,
+  intent_to_airbnb INTEGER NOT NULL,
+  full_time_residence INTEGER NOT NULL,
+  background_disclosure TEXT,
+  screening_consent INTEGER NOT NULL,
+  move_reason TEXT,
+  additional_notes TEXT,
+  score INTEGER,
+  status TEXT NOT NULL DEFAULT 'new',
+  admin_notes TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS tenants (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  property_id INTEGER REFERENCES properties(id),
+  full_name TEXT NOT NULL,
+  email TEXT,
+  phone TEXT,
+  access_token TEXT NOT NULL UNIQUE,
+  move_in_date TEXT,
+  move_out_date TEXT,
+  monthly_rent REAL NOT NULL,
+  deposit_required REAL NOT NULL,
+  deposit_paid REAL NOT NULL DEFAULT 0,
+  lease_status TEXT NOT NULL DEFAULT 'active',
+  notes TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS lease_terms (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  property_id INTEGER NOT NULL REFERENCES properties(id),
+  lease_start TEXT,
+  lease_end TEXT,
+  monthly_rent REAL NOT NULL,
+  late_fee_rule TEXT,
+  security_deposit REAL,
+  pets_allowed INTEGER DEFAULT 0,
+  pet_fee REAL,
+  pet_rent REAL,
+  utilities_terms TEXT,
+  maintenance_terms TEXT,
+  smoking_terms TEXT,
+  showing_notice_terms TEXT,
+  special_terms TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS payments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+  property_id INTEGER NOT NULL REFERENCES properties(id),
+  due_date TEXT NOT NULL,
+  amount_due REAL NOT NULL,
+  amount_paid REAL NOT NULL DEFAULT 0,
+  payment_date TEXT,
+  payment_method TEXT,
+  status TEXT NOT NULL DEFAULT 'unpaid',
+  late_fee REAL DEFAULT 0,
+  notes TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS deposits (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+  property_id INTEGER NOT NULL REFERENCES properties(id),
+  deposit_required REAL NOT NULL,
+  deposit_paid REAL NOT NULL DEFAULT 0,
+  paid_date TEXT,
+  refund_amount REAL,
+  refund_date TEXT,
+  deductions TEXT,
+  notes TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS maintenance_requests (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  property_id INTEGER REFERENCES properties(id),
+  tenant_name TEXT NOT NULL,
+  tenant_phone TEXT,
+  tenant_email TEXT,
+  title TEXT NOT NULL,
+  description TEXT NOT NULL,
+  category TEXT NOT NULL,
+  priority TEXT NOT NULL DEFAULT 'medium',
+  status TEXT NOT NULL DEFAULT 'open',
+  admin_notes TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);

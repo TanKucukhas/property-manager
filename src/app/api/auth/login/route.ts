@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { getDb } from "@/lib/db";
 import { admins } from "@/db/schema";
 import { verifyPassword, setSession } from "@/lib/auth";
 import { loginSchema } from "@/lib/validations";
@@ -7,6 +7,7 @@ import { eq } from "drizzle-orm";
 
 export async function POST(request: Request) {
   try {
+    const db = await getDb();
     const body = await request.json();
     const parsed = loginSchema.safeParse(body);
     if (!parsed.success) {

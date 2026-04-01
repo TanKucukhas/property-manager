@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { getDb } from "@/lib/db";
 import { properties, tenants, prescreenings, payments, maintenanceRequests } from "@/db/schema";
 import { getSession } from "@/lib/auth";
 import { eq, sql } from "drizzle-orm";
@@ -8,6 +8,7 @@ export async function GET() {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const db = await getDb();
   const propertiesCount = db.select({ count: sql<number>`count(*)` }).from(properties).get()?.count ?? 0;
   const availableCount = db.select({ count: sql<number>`count(*)` }).from(properties).where(eq(properties.status, "available")).get()?.count ?? 0;
   const tenantsCount = db.select({ count: sql<number>`count(*)` }).from(tenants).where(eq(tenants.leaseStatus, "active")).get()?.count ?? 0;
@@ -21,10 +22,10 @@ export async function GET() {
     .where(sql`${payments.dueDate} >= ${monthStart} AND ${payments.dueDate} <= ${monthEnd}`)
     .all();
 
-  const rentDue = monthPayments.reduce((sum, p) => sum + p.amountDue, 0);
-  const rentCollected = monthPayments.reduce((sum, p) => sum + p.amountPaid, 0);
+  const rentDue = monthPayments.reduce((sum: number, p: { amountDue: number }) => sum + p.amountDue, 0);
+  const rentCollected = monthPayments.reduce((sum: number, p: { amountPaid: number }) => sum + p.amountPaid, 0);
   const unpaidBalance = rentDue - rentCollected;
-  const lateCount = monthPayments.filter(p => p.status === "late").length;
+  const lateCount = monthPayments.filter((p: { status: string }) => p.status === "late").length;
 
   const openMaintenance = db.select({ count: sql<number>`count(*)` }).from(maintenanceRequests)
     .where(sql`${maintenanceRequests.status} IN ('open', 'in_progress')`)

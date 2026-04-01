@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { getDb } from "@/lib/db";
 import { tenants } from "@/db/schema";
 import { tenantSchema } from "@/lib/validations";
 import { getSession } from "@/lib/auth";
@@ -8,6 +8,7 @@ import { eq } from "drizzle-orm";
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const db = await getDb();
   const { id } = await params;
   const record = db.select().from(tenants).where(eq(tenants.id, parseInt(id))).get();
   if (!record) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -18,6 +19,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const db = await getDb();
   const { id } = await params;
   const body = await request.json();
   const parsed = tenantSchema.safeParse(body);
@@ -32,6 +34,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const db = await getDb();
   const { id } = await params;
   db.delete(tenants).where(eq(tenants.id, parseInt(id))).run();
   return NextResponse.json({ success: true });
