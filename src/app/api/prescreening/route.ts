@@ -46,16 +46,13 @@ export async function POST(request: Request) {
       showingAvailability: data.showingAvailability ?? undefined,
     };
 
-    // Send confirmation to applicant with their submission copy
+    // Send emails — must await in Workers (no background tasks after response)
     const confirmation = prescreeningConfirmationEmail(data.fullName, summary);
-    sendEmail({ to: [{ email: data.email, name: data.fullName }], ...confirmation }).catch(console.error);
-
-    // Notify admin with score and flags
     const adminNotif = prescreeningAdminNotification(data.fullName, data.email, score, flags);
-    sendEmail({
-      to: [{ email: "tankucukhas@gmail.com", name: "Admin" }],
-      ...adminNotif,
-    }).catch(console.error);
+    await Promise.allSettled([
+      sendEmail({ to: [{ email: data.email, name: data.fullName }], ...confirmation }),
+      sendEmail({ to: [{ email: "tankucukhas@gmail.com", name: "Admin" }], ...adminNotif }),
+    ]);
 
     return NextResponse.json({ success: true, id: result.id });
   } catch (e) {
