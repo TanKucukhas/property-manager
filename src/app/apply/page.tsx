@@ -426,12 +426,12 @@ export default function ApplyPage() {
               <div className="grid gap-6 sm:grid-cols-2">
                 <div>
                   <Label htmlFor="phone" required>Phone</Label>
-                  <input id="phone" type="tel" className={input} {...register("phone", { required: "Required" })} />
+                  <input id="phone" type="tel" className={input} placeholder="(555) 123-4567" {...register("phone", { required: "Required", pattern: { value: /^[\d\s\-().+]{10,}$/, message: "Enter a valid phone number" } })} />
                   <Err msg={errors.phone?.message} />
                 </div>
                 <div>
                   <Label htmlFor="email" required>Email</Label>
-                  <input id="email" type="email" className={input} {...register("email", { required: "Required" })} />
+                  <input id="email" type="email" className={input} placeholder="you@example.com" {...register("email", { required: "Required", pattern: { value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: "Enter a valid email address" } })} />
                   <Err msg={errors.email?.message} />
                 </div>
               </div>
