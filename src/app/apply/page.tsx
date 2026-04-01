@@ -401,15 +401,21 @@ export default function ApplyPage() {
                   <Err msg={errors.email?.message} />
                 </div>
               </div>
-              <div>
-                <Label htmlFor="preferredContactMethod" required>Preferred Contact Method</Label>
-                <select id="preferredContactMethod" className={select} {...register("preferredContactMethod", { required: "Required" })}>
-                  <option value="">Select...</option>
-                  <option value="phone">Phone call</option>
-                  <option value="text">Text message</option>
-                  <option value="email">Email</option>
-                </select>
-                <Err msg={errors.preferredContactMethod?.message} />
+              <div className="grid gap-6 sm:grid-cols-2">
+                <div>
+                  <Label htmlFor="preferredContactMethod" required>Preferred Contact Method</Label>
+                  <select id="preferredContactMethod" className={select} {...register("preferredContactMethod", { required: "Required" })}>
+                    <option value="">Select...</option>
+                    <option value="phone">Phone call</option>
+                    <option value="text">Text message</option>
+                    <option value="email">Email</option>
+                  </select>
+                  <Err msg={errors.preferredContactMethod?.message} />
+                </div>
+                <div>
+                  <Label htmlFor="dateOfBirth">Date of Birth</Label>
+                  <input id="dateOfBirth" type="date" className={input} {...register("dateOfBirth")} />
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -420,16 +426,10 @@ export default function ApplyPage() {
           <Card>
             <CardHeader><CardTitle className="text-2xl">Move-in Details</CardTitle></CardHeader>
             <CardContent className="space-y-6">
-              <div className="grid gap-6 sm:grid-cols-2">
-                <div>
-                  <Label htmlFor="dateOfBirth">Date of Birth</Label>
-                  <input id="dateOfBirth" type="date" className={input} {...register("dateOfBirth")} />
-                </div>
-                <div>
-                  <Label htmlFor="desiredMoveIn" required>Desired Move-in Date</Label>
-                  <input id="desiredMoveIn" type="date" className={input} {...register("desiredMoveIn", { required: "Required" })} />
-                  <Err msg={errors.desiredMoveIn?.message} />
-                </div>
+              <div>
+                <Label htmlFor="desiredMoveIn" required>Desired Move-in Date</Label>
+                <input id="desiredMoveIn" type="date" className={input} {...register("desiredMoveIn", { required: "Required" })} />
+                <Err msg={errors.desiredMoveIn?.message} />
               </div>
               <div>
                 <Label htmlFor="currentAddress" required>Current Address</Label>
