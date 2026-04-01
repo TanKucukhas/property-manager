@@ -2,11 +2,22 @@ import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
 import bcrypt from "bcryptjs";
 
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || "property-manager-secret-change-in-production"
-);
-
 const COOKIE_NAME = "pm_session";
+
+async function getJwtSecret(): Promise<Uint8Array> {
+  let secret = process.env.JWT_SECRET;
+  if (!secret) {
+    try {
+      const { getCloudflareContext } = await import("@opennextjs/cloudflare");
+      const { env } = await getCloudflareContext();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      secret = (env as any).JWT_SECRET;
+    } catch {
+      // local dev
+    }
+  }
+  return new TextEncoder().encode(secret || "property-manager-secret-change-in-production");
+}
 
 export async function hashPassword(password: string): Promise<string> {
   return bcrypt.hash(password, 12);
@@ -17,16 +28,18 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
 }
 
 export async function createToken(payload: { id: number; email: string }): Promise<string> {
+  const secret = await getJwtSecret();
   return new SignJWT(payload)
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime("7d")
-    .sign(JWT_SECRET);
+    .sign(secret);
 }
 
 export async function verifyToken(token: string) {
   try {
-    const { payload } = await jwtVerify(token, JWT_SECRET);
+    const secret = await getJwtSecret();
+    const { payload } = await jwtVerify(token, secret);
     return payload as { id: number; email: string };
   } catch {
     return null;

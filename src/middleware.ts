@@ -2,9 +2,20 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { jwtVerify } from "jose";
 
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || "property-manager-secret-change-in-production"
-);
+async function getSecret() {
+  let secret = process.env.JWT_SECRET;
+  if (!secret) {
+    try {
+      const { getCloudflareContext } = await import("@opennextjs/cloudflare");
+      const { env } = await getCloudflareContext();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      secret = (env as any).JWT_SECRET;
+    } catch {
+      // local dev
+    }
+  }
+  return new TextEncoder().encode(secret || "property-manager-secret-change-in-production");
+}
 
 export async function middleware(request: NextRequest) {
   if (request.nextUrl.pathname.startsWith("/admin")) {
@@ -13,7 +24,8 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(new URL("/login", request.url));
     }
     try {
-      await jwtVerify(token, JWT_SECRET);
+      const secret = await getSecret();
+      await jwtVerify(token, secret);
       return NextResponse.next();
     } catch {
       return NextResponse.redirect(new URL("/login", request.url));

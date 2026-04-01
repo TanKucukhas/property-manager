@@ -15,7 +15,17 @@ export async function sendEmail({
   senderName = "Cresiq Property Manager",
   senderEmail = "hello@cresiq.com",
 }: SendEmailParams) {
-  const apiKey = process.env.BREVO_API_KEY;
+  let apiKey = process.env.BREVO_API_KEY;
+  if (!apiKey) {
+    try {
+      const { getCloudflareContext } = await import("@opennextjs/cloudflare");
+      const { env } = await getCloudflareContext();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      apiKey = (env as any).BREVO_API_KEY;
+    } catch {
+      // local dev
+    }
+  }
   if (!apiKey) {
     console.warn("BREVO_API_KEY not set, skipping email");
     return null;

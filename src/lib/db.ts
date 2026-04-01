@@ -5,13 +5,18 @@ let _localDb: any = null;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function getDb(): Promise<any> {
-  // Cloudflare Workers: use D1
-  if (process.env.CF_PAGES || process.env.__NEXT_ON_WORKERS) {
+  // Try Cloudflare D1 first
+  try {
     const { getCloudflareContext } = await import("@opennextjs/cloudflare");
     const { env } = await getCloudflareContext();
-    const { drizzle } = await import("drizzle-orm/d1");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return drizzle((env as any).DB, { schema });
+    if ((env as any).DB) {
+      const { drizzle } = await import("drizzle-orm/d1");
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return drizzle((env as any).DB, { schema });
+    }
+  } catch {
+    // Not on Cloudflare, fall through to local
   }
 
   // Local dev: use better-sqlite3
