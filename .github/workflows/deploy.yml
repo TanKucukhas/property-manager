@@ -18,7 +18,7 @@ jobs:
         run: npm ci
 
       - name: Build for Cloudflare
-        run: npm run build
+        run: npx opennextjs-cloudflare build
 
       - name: Deploy to Cloudflare
         run: npx opennextjs-cloudflare deploy
