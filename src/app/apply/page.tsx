@@ -177,6 +177,9 @@ export default function ApplyPage() {
       return next;
     });
   }, [totalOccupants]);
+
+  // Validate all occupant names are filled
+  const allOccupantsFilled = occupantNames.length > 0 && occupantNames.every(n => n.trim().length > 0);
   const lateRent = watch("lateRentPayments");
   const hasPets = watch("hasPets");
   const broken = watch("brokenLease");
@@ -197,6 +200,12 @@ export default function ApplyPage() {
     if (fields.length > 0) {
       const valid = await trigger(fields);
       if (!valid) return;
+    }
+    // Step 3: validate all occupant names are filled
+    if (step === 3 && !allOccupantsFilled) {
+      setValue("occupantNames", "", { shouldValidate: true });
+      toast.error("Please enter a name for every occupant.");
+      return;
     }
     setStep(s => Math.min(s + 1, TOTAL_STEPS - 1));
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -474,6 +483,7 @@ export default function ApplyPage() {
                       <div key={i}>
                         <p className="text-sm font-medium text-muted-foreground mb-1">{label}</p>
                         <input
+                          required
                           className={input}
                           placeholder={`${label} — full name`}
                           value={name}
