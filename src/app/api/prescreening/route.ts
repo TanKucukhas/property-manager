@@ -4,7 +4,7 @@ import { prescreenings } from "@/db/schema";
 import { prescreeningSchema, scorePrescreening } from "@/lib/validations";
 import { desc } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
-import { sendEmail, prescreeningConfirmationEmail, prescreeningApprovedEmail, prescreeningRejectedEmail, prescreeningAdminNotification, type ApplicationSummary } from "@/lib/mailer";
+import { sendEmail, prescreeningConfirmationEmail, prescreeningAdminNotification, type ApplicationSummary } from "@/lib/mailer";
 
 export async function POST(request: Request) {
   try {
@@ -19,14 +19,14 @@ export async function POST(request: Request) {
     }
 
     const data = parsed.data;
-    const { score, status } = scorePrescreening(data);
+    const { score, flags } = scorePrescreening(data);
 
     const result = db.insert(prescreenings).values({
       ...data,
       petsJson: data.petsJson || null,
       currentHousingPayment: data.currentHousingPayment ?? null,
       score,
-      status,
+      status: "new",
     }).returning().get();
 
     // Build summary for applicant's copy
@@ -46,26 +46,18 @@ export async function POST(request: Request) {
       showingAvailability: data.showingAvailability ?? undefined,
     };
 
-    // Send status-specific email to applicant (with their submission copy)
-    if (status === "pre-approved") {
-      const approved = prescreeningApprovedEmail(data.fullName, summary);
-      sendEmail({ to: [{ email: data.email, name: data.fullName }], ...approved }).catch(console.error);
-    } else if (status === "rejected") {
-      const rejected = prescreeningRejectedEmail(data.fullName, summary);
-      sendEmail({ to: [{ email: data.email, name: data.fullName }], ...rejected }).catch(console.error);
-    } else {
-      const confirmation = prescreeningConfirmationEmail(data.fullName, summary);
-      sendEmail({ to: [{ email: data.email, name: data.fullName }], ...confirmation }).catch(console.error);
-    }
+    // Send confirmation to applicant with their submission copy
+    const confirmation = prescreeningConfirmationEmail(data.fullName, summary);
+    sendEmail({ to: [{ email: data.email, name: data.fullName }], ...confirmation }).catch(console.error);
 
-    // Notify admin of every submission
-    const adminNotif = prescreeningAdminNotification(data.fullName, data.email, score, status);
+    // Notify admin with score and flags
+    const adminNotif = prescreeningAdminNotification(data.fullName, data.email, score, flags);
     sendEmail({
       to: [{ email: "tankucukhas@gmail.com", name: "Admin" }],
       ...adminNotif,
     }).catch(console.error);
 
-    return NextResponse.json({ success: true, id: result.id, score, status });
+    return NextResponse.json({ success: true, id: result.id });
   } catch (e) {
     console.error(e);
     return NextResponse.json({ error: "Server error" }, { status: 500 });

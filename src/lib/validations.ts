@@ -139,98 +139,66 @@ export const leaseTermsSchema = z.object({
   specialTerms: z.string().optional(),
 });
 
-// Prescreening scoring
-// Mirrors non-negotiable lease standards:
-//   - Credit 675+
-//   - Income >= 2.75x rent ($3,437.50 for $1,250 rent)
-//   - Move-in funds available
-//   - No subleasing / Airbnb
-//   - Willingness to complete paid screening
-//   - Pets case-by-case
+// Prescreening scoring — informational only, no auto-reject
+// Score helps admin prioritize review, all applications go to "new" status
 const INCOME_THRESHOLD = 3437.50;
 
 export function scorePrescreening(data: z.infer<typeof prescreeningSchema>): {
   score: number;
-  status: "rejected" | "review" | "pre-approved";
-  reasons: string[];
+  flags: string[];
 } {
   let score = 0;
-  const reasons: string[] = [];
+  const flags: string[] = [];
 
-  // Credit score (0-25 points)
+  // Credit (0-20)
   const creditMap: Record<string, number> = {
-    "800+": 25,
-    "750-799": 23,
-    "700-749": 20,
-    "650-699": 15,
+    "800+": 20,
+    "750-799": 18,
+    "700-749": 15,
+    "650-699": 12,
     "600-649": 8,
-    "550-599": 3,
-    "500-549": 0,
+    "550-599": 5,
+    "500-549": 2,
     "below-500": 0,
     "unknown": 5,
   };
   score += creditMap[data.creditScoreRange] ?? 0;
-  if (["500-549", "below-500"].includes(data.creditScoreRange)) {
-    reasons.push("Low credit score");
-  }
+  if (["500-549", "below-500"].includes(data.creditScoreRange)) flags.push("Low credit score");
 
-  // Income (0-25 points)
+  // Income (0-25)
   if (data.monthlyIncome >= INCOME_THRESHOLD * 1.2) score += 25;
   else if (data.monthlyIncome >= INCOME_THRESHOLD) score += 20;
-  else {
-    reasons.push("Income below $3,437.50 threshold");
-  }
+  else if (data.monthlyIncome >= INCOME_THRESHOLD * 0.8) { score += 10; flags.push("Income below 2.75x rent"); }
+  else { flags.push("Income significantly below threshold"); }
 
-  // Move-in funds (0-10 points)
+  // Move-in funds (0-10)
   if (data.canPayMoveIn) score += 10;
-  else reasons.push("Cannot pay $2,500 move-in cost");
+  else flags.push("Cannot pay move-in funds");
 
-  // Rental history (0-20 points)
-  if (!data.priorEviction && !data.landlordDebt && !data.brokenLease && !data.askedToMoveOut) {
-    score += 20;
-  } else {
-    if (data.priorEviction) reasons.push("Prior eviction");
-    if (data.landlordDebt) reasons.push("Owes landlord/utility debt");
-    if (data.brokenLease) reasons.push("Broken lease history");
-    if (data.askedToMoveOut) reasons.push("Previously asked to move out");
-  }
+  // Rental history (0-20)
+  let rentalScore = 20;
+  if (data.priorEviction) { rentalScore -= 10; flags.push("Prior eviction"); }
+  if (data.landlordDebt) { rentalScore -= 5; flags.push("Owes landlord/utility debt"); }
+  if (data.brokenLease) { rentalScore -= 3; flags.push("Broken lease"); }
+  if (data.askedToMoveOut) { rentalScore -= 2; flags.push("Asked to move out"); }
+  score += Math.max(rentalScore, 0);
 
-  // Screening consent (0-10 points)
+  // Screening consent (0-10)
   if (data.screeningConsent) score += 10;
-  else reasons.push("Refuses background/credit screening");
+  else flags.push("Refuses screening");
 
-  // All adults willing to screen (0-5 points)
+  // All adults willing (0-5)
   if (data.allAdultsWillingToScreen) score += 5;
-  else if (data.allAdultsWillingToScreen === false) reasons.push("Not all adults willing to screen");
+  else if (data.allAdultsWillingToScreen === false) flags.push("Not all adults willing to screen");
 
-  // Property use (0-5 points)
+  // Property use (0-10)
   if (data.fullTimeResidence && !data.intentToSublease && !data.intentToAirbnb) {
-    score += 5;
+    score += 10;
   } else {
-    if (data.intentToSublease) reasons.push("Intends to sublease");
-    if (data.intentToAirbnb) reasons.push("Intends to use for Airbnb");
-    if (!data.fullTimeResidence) reasons.push("Not full-time residence");
+    if (data.intentToSublease) flags.push("Intends to sublease");
+    if (data.intentToAirbnb) flags.push("Intends to Airbnb");
+    if (!data.fullTimeResidence) flags.push("Not full-time residence");
   }
 
-  // Auto-reject triggers (non-negotiable lease standards)
-  const autoReject =
-    ["500-549", "below-500"].includes(data.creditScoreRange) ||
-    data.monthlyIncome < INCOME_THRESHOLD ||
-    !data.canPayMoveIn ||
-    data.priorEviction ||
-    data.landlordDebt ||
-    !data.screeningConsent ||
-    data.intentToSublease ||
-    data.intentToAirbnb;
-
-  let status: "rejected" | "review" | "pre-approved";
-  if (autoReject) {
-    status = "rejected";
-  } else if (score >= 80) {
-    status = "pre-approved";
-  } else {
-    status = "review";
-  }
-
-  return { score, status, reasons };
+  return { score: Math.min(score, 100), flags };
 }

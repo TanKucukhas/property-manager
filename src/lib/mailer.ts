@@ -102,69 +102,23 @@ export function prescreeningConfirmationEmail(name: string, summary?: Applicatio
   };
 }
 
-export function prescreeningApprovedEmail(name: string, summary?: ApplicationSummary) {
-  return {
-    subject: "Next Step: Background & Credit Screening",
-    htmlContent: `
-      <div style="font-family: Roboto, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px;">
-        <h2 style="color: #1a1a1a;">You're Pre-Approved!</h2>
-        <p>Hi ${name},</p>
-        <p>Great news — your pre-screening application meets our minimum requirements.</p>
-        <p>The next step is to complete a formal background and credit screening. The cost is <strong>$47</strong>, paid directly by you through the screening provider.</p>
-        <div style="margin: 24px 0; padding: 16px; background: #f5f5f5; border-radius: 8px;">
-          <p style="margin: 0; font-weight: bold;">How to proceed:</p>
-          <ol style="margin: 8px 0 0 0; padding-left: 20px;">
-            <li>We will contact you shortly to schedule a showing</li>
-            <li>At that time, we will send you a direct link to complete the $47 screening</li>
-            <li>Once the screening clears, we move forward with the lease</li>
-          </ol>
-        </div>
-        <p><strong>Move-in costs reminder:</strong></p>
-        <ul style="padding-left: 20px;">
-          <li>First month's rent: $1,250</li>
-          <li>Security deposit: $1,250</li>
-          <li><strong>Total: $2,500</strong></li>
-        </ul>
-        <p>If you have any questions, reply to this email or contact your property manager directly.</p>
-        ${summary ? buildSummaryBlock(summary) : ""}
-        <p style="font-size: 12px; color: #999;">Please keep this email for your records.</p>
-        <p style="margin-top: 24px; color: #666;">Cresiq Property Management</p>
-      </div>
-    `,
-  };
-}
+export function prescreeningAdminNotification(name: string, email: string, score: number, flags: string[]) {
+  const flagsHtml = flags.length > 0
+    ? `<div style="margin-top: 12px; padding: 12px; background: #fff3cd; border-radius: 6px;"><p style="margin: 0 0 6px; font-weight: bold; font-size: 13px;">Flags:</p><ul style="margin: 0; padding-left: 18px; font-size: 13px;">${flags.map(f => `<li>${f}</li>`).join("")}</ul></div>`
+    : `<p style="margin-top: 12px; color: #28a745; font-size: 13px;">No flags — clean application.</p>`;
 
-export function prescreeningRejectedEmail(name: string, summary?: ApplicationSummary) {
   return {
-    subject: "Pre-Screening Application Update",
+    subject: `New Application: ${name} (Score: ${score}/100)`,
     htmlContent: `
       <div style="font-family: Roboto, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px;">
-        <h2 style="color: #1a1a1a;">Application Update</h2>
-        <p>Hi ${name},</p>
-        <p>Thank you for your interest and for taking the time to complete the pre-screening application.</p>
-        <p>After reviewing your submission, we are unable to move forward with your application at this time based on the minimum qualification requirements for this property.</p>
-        <p>We appreciate your time and wish you the best in your housing search.</p>
-        ${summary ? buildSummaryBlock(summary) : ""}
-        <p style="font-size: 12px; color: #999;">Please keep this email for your records.</p>
-        <p style="margin-top: 24px; color: #666;">Cresiq Property Management</p>
-      </div>
-    `,
-  };
-}
-
-export function prescreeningAdminNotification(name: string, email: string, score: number, status: string) {
-  return {
-    subject: `New Pre-Screening: ${name} (Score: ${score})`,
-    htmlContent: `
-      <div style="font-family: Roboto, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px;">
-        <h2 style="color: #1a1a1a;">New Pre-Screening Submission</h2>
+        <h2 style="color: #1a1a1a;">New Pre-Screening Application</h2>
         <table style="border-collapse: collapse; width: 100%;">
           <tr><td style="padding: 8px; font-weight: bold;">Applicant:</td><td style="padding: 8px;">${name}</td></tr>
           <tr><td style="padding: 8px; font-weight: bold;">Email:</td><td style="padding: 8px;">${email}</td></tr>
-          <tr><td style="padding: 8px; font-weight: bold;">Score:</td><td style="padding: 8px;">${score}/100</td></tr>
-          <tr><td style="padding: 8px; font-weight: bold;">Status:</td><td style="padding: 8px; text-transform: uppercase;">${status}</td></tr>
+          <tr><td style="padding: 8px; font-weight: bold;">Score:</td><td style="padding: 8px;"><strong>${score}/100</strong></td></tr>
         </table>
-        <p style="margin-top: 16px;">Log in to your admin dashboard to review the full application.</p>
+        ${flagsHtml}
+        <p style="margin-top: 16px;">Log in to review the full application and update status.</p>
       </div>
     `,
   };
