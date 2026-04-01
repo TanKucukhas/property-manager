@@ -152,6 +152,7 @@ export default function ApplyPage() {
   const [submitted, setSubmitted] = useState(false);
   const [properties, setProperties] = useState<AvailableProperty[]>([]);
   const [selectedProp, setSelectedProp] = useState<AvailableProperty | null>(null);
+  const [occupants, setOccupants] = useState<string[]>([""]);
 
   useEffect(() => {
     fetch("/api/properties/available").then(r => r.json()).then(d => setProperties(Array.isArray(d) ? d : [])).catch(() => {});
@@ -447,8 +448,50 @@ export default function ApplyPage() {
                 </div>
               </div>
               <div>
-                <Label htmlFor="occupantNames" required>Full Names of All Occupants</Label>
-                <textarea id="occupantNames" className={textarea} placeholder="List all adults and minors who will live in the unit" {...register("occupantNames", { required: "Required" })} />
+                <Label required>Full Names of All Occupants</Label>
+                <p className="text-sm text-muted-foreground mt-1 mb-3">Add each person who will live in the unit.</p>
+                <input type="hidden" {...register("occupantNames", { required: "Add at least one occupant" })} />
+                <div className="space-y-3">
+                  {occupants.map((occ, i) => (
+                    <div key={i} className="flex gap-2">
+                      <input
+                        className={input + " flex-1"}
+                        placeholder={`Occupant ${i + 1} — full name`}
+                        value={occ}
+                        onChange={(e) => {
+                          const updated = [...occupants];
+                          updated[i] = e.target.value;
+                          setOccupants(updated);
+                          setValue("occupantNames", updated.filter(n => n.trim()).join("\n"), { shouldValidate: true });
+                        }}
+                      />
+                      {occupants.length > 1 && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-14 px-3 text-muted-foreground hover:text-red-500"
+                          onClick={() => {
+                            const updated = occupants.filter((_, j) => j !== i);
+                            setOccupants(updated);
+                            setValue("occupantNames", updated.filter(n => n.trim()).join("\n"), { shouldValidate: true });
+                          }}
+                        >
+                          &times;
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="mt-3"
+                  onClick={() => setOccupants([...occupants, ""])}
+                >
+                  + Add Occupant
+                </Button>
                 <Err msg={errors.occupantNames?.message} />
               </div>
               <div className="grid gap-6 sm:grid-cols-2">
