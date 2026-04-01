@@ -18,13 +18,14 @@ interface PrescreeningRecord {
   firstName?: string
   lastName?: string
   email: string
-  creditScore?: number
-  income?: number
+  creditScoreRange?: string
+  monthlyIncome?: number
   score?: number
+  adminRating?: number
   status: string
   createdAt?: string
   date?: string
-  notes?: string
+  adminNotes?: string
   [key: string]: unknown
 }
 
@@ -61,6 +62,7 @@ export default function PrescreeningPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editStatus, setEditStatus] = useState("")
   const [editNotes, setEditNotes] = useState("")
+  const [editRating, setEditRating] = useState(0)
   const [saving, setSaving] = useState(false)
 
   async function loadRecords() {
@@ -81,7 +83,8 @@ export default function PrescreeningPage() {
   function openDetail(record: PrescreeningRecord) {
     setSelected(record)
     setEditStatus(record.status)
-    setEditNotes(record.notes || "")
+    setEditNotes(record.adminNotes || "")
+    setEditRating(record.adminRating ?? 0)
     setDialogOpen(true)
   }
 
@@ -92,7 +95,7 @@ export default function PrescreeningPage() {
       const res = await fetch(`/api/prescreening/${selected.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: editStatus, notes: editNotes }),
+        body: JSON.stringify({ status: editStatus, adminNotes: editNotes, adminRating: editRating }),
       })
       if (!res.ok) throw new Error("Failed to update")
       setDialogOpen(false)
@@ -133,9 +136,9 @@ export default function PrescreeningPage() {
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead className="hidden sm:table-cell">Email</TableHead>
-                <TableHead className="hidden md:table-cell">Credit Score</TableHead>
+                <TableHead className="hidden md:table-cell">Credit</TableHead>
                 <TableHead className="hidden md:table-cell">Income</TableHead>
-                <TableHead className="hidden lg:table-cell">Score</TableHead>
+                <TableHead className="hidden lg:table-cell">Total Score</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="hidden lg:table-cell">Date</TableHead>
               </TableRow>
@@ -151,9 +154,12 @@ export default function PrescreeningPage() {
                   >
                     <TableCell className="font-medium">{getName(r)}</TableCell>
                     <TableCell className="hidden sm:table-cell">{r.email}</TableCell>
-                    <TableCell className="hidden md:table-cell">{r.creditScore ?? "-"}</TableCell>
-                    <TableCell className="hidden md:table-cell">{formatCurrency(r.income)}</TableCell>
-                    <TableCell className="hidden lg:table-cell">{r.score ?? "-"}</TableCell>
+                    <TableCell className="hidden md:table-cell">{r.creditScoreRange ?? "-"}</TableCell>
+                    <TableCell className="hidden md:table-cell">{formatCurrency(r.monthlyIncome)}</TableCell>
+                    <TableCell className="hidden lg:table-cell">
+                      <span className="font-medium">{(r.score ?? 0) + (r.adminRating ?? 0)}</span>
+                      <span className="text-xs text-muted-foreground">/100</span>
+                    </TableCell>
                     <TableCell>
                       <Badge variant={sc.variant} className={sc.className}>
                         {r.status}
@@ -190,6 +196,38 @@ export default function PrescreeningPage() {
                       </span>
                     </div>
                   ))}
+              </div>
+
+              {/* Score summary */}
+              <div className="rounded-lg border bg-muted/30 p-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">Total Score</span>
+                  <span className="text-2xl font-bold">{(selected.score ?? 0) + editRating}<span className="text-sm font-normal text-muted-foreground">/100</span></span>
+                </div>
+                <div className="flex items-center justify-between text-xs text-muted-foreground mt-1">
+                  <span>Form: {selected.score ?? 0}/80</span>
+                  <span>Your rating: {editRating}/20</span>
+                </div>
+                <div className="h-2 w-full rounded-full bg-muted mt-2 overflow-hidden">
+                  <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${(selected.score ?? 0) + editRating}%` }} />
+                </div>
+              </div>
+
+              {/* Admin rating */}
+              <div className="flex flex-col gap-2">
+                <Label>Your Rating (0-20)</Label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="range"
+                    min={0}
+                    max={20}
+                    value={editRating}
+                    onChange={(e) => setEditRating(parseInt(e.target.value))}
+                    className="flex-1 h-2 accent-primary"
+                  />
+                  <span className="text-lg font-semibold w-8 text-center">{editRating}</span>
+                </div>
+                <p className="text-xs text-muted-foreground">Based on your impression from communication, responsiveness, references, etc.</p>
               </div>
 
               <div className="flex flex-col gap-2">

@@ -81,6 +81,7 @@ export const prescreenings = sqliteTable("prescreenings", {
   moveReason: text("move_reason"),
   additionalNotes: text("additional_notes"),
   score: integer("score"),
+  adminRating: integer("admin_rating"),
   status: text("status").notNull().default("new"),
   adminNotes: text("admin_notes"),
   createdAt: text("created_at").notNull().$defaultFn(() => new Date().toISOString()),

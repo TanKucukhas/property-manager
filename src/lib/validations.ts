@@ -140,7 +140,8 @@ export const leaseTermsSchema = z.object({
 });
 
 // Prescreening scoring — informational only, no auto-reject
-// Score helps admin prioritize review, all applications go to "new" status
+// Total: 80 from form + 20 from admin rating = 100
+// Consent fields are flags, not scored — you either consent or you don't
 const INCOME_THRESHOLD = 3437.50;
 
 export function scorePrescreening(data: z.infer<typeof prescreeningSchema>): {
@@ -150,20 +151,21 @@ export function scorePrescreening(data: z.infer<typeof prescreeningSchema>): {
   let score = 0;
   const flags: string[] = [];
 
-  // Credit (0-20)
+  // Credit (0-25)
   const creditMap: Record<string, number> = {
-    "800+": 20,
-    "750-799": 18,
-    "700-749": 15,
-    "650-699": 12,
-    "600-649": 8,
+    "800+": 25,
+    "750-799": 22,
+    "700-749": 18,
+    "650-699": 14,
+    "600-649": 9,
     "550-599": 5,
     "500-549": 2,
     "below-500": 0,
-    "unknown": 5,
+    "unknown": 0,
   };
   score += creditMap[data.creditScoreRange] ?? 0;
   if (["500-549", "below-500"].includes(data.creditScoreRange)) flags.push("Low credit score");
+  if (data.creditScoreRange === "unknown") flags.push("Credit score unknown");
 
   // Income (0-25)
   if (data.monthlyIncome >= INCOME_THRESHOLD * 1.2) score += 25;
@@ -171,7 +173,7 @@ export function scorePrescreening(data: z.infer<typeof prescreeningSchema>): {
   else if (data.monthlyIncome >= INCOME_THRESHOLD * 0.8) { score += 10; flags.push("Income below 2.75x rent"); }
   else { flags.push("Income significantly below threshold"); }
 
-  // Move-in funds (0-10)
+  // Move-in readiness (0-10)
   if (data.canPayMoveIn) score += 10;
   else flags.push("Cannot pay move-in funds");
 
@@ -181,24 +183,19 @@ export function scorePrescreening(data: z.infer<typeof prescreeningSchema>): {
   if (data.landlordDebt) { rentalScore -= 5; flags.push("Owes landlord/utility debt"); }
   if (data.brokenLease) { rentalScore -= 3; flags.push("Broken lease"); }
   if (data.askedToMoveOut) { rentalScore -= 2; flags.push("Asked to move out"); }
+  if (data.propertyDamageHistory) { rentalScore -= 2; flags.push("Property damage history"); }
   score += Math.max(rentalScore, 0);
 
-  // Screening consent (0-10)
-  if (data.screeningConsent) score += 10;
-  else flags.push("Refuses screening");
+  // Flags only — no points, just info for admin
+  if (!data.screeningConsent) flags.push("Refuses screening");
+  if (data.allAdultsWillingToScreen === false) flags.push("Not all adults willing to screen");
+  if (data.intentToSublease) flags.push("Intends to sublease");
+  if (data.intentToAirbnb) flags.push("Intends to Airbnb");
+  if (!data.fullTimeResidence) flags.push("Not full-time residence");
+  if (data.smoking) flags.push("Smoker/vaper in household");
 
-  // All adults willing (0-5)
-  if (data.allAdultsWillingToScreen) score += 5;
-  else if (data.allAdultsWillingToScreen === false) flags.push("Not all adults willing to screen");
+  // Admin rating adds up to 20 points (set manually in admin panel)
+  // Not calculated here — added when admin reviews
 
-  // Property use (0-10)
-  if (data.fullTimeResidence && !data.intentToSublease && !data.intentToAirbnb) {
-    score += 10;
-  } else {
-    if (data.intentToSublease) flags.push("Intends to sublease");
-    if (data.intentToAirbnb) flags.push("Intends to Airbnb");
-    if (!data.fullTimeResidence) flags.push("Not full-time residence");
-  }
-
-  return { score: Math.min(score, 100), flags };
+  return { score: Math.min(score, 80), flags };
 }

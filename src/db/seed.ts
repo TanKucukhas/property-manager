@@ -96,6 +96,7 @@ db.exec(`
     move_reason TEXT,
     additional_notes TEXT,
     score INTEGER,
+    admin_rating INTEGER,
     status TEXT NOT NULL DEFAULT 'new',
     admin_notes TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
