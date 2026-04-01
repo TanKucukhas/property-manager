@@ -26,6 +26,9 @@ export default function RootLayout({
       suppressHydrationWarning
       className={`${roboto.variable} h-full antialiased`}
     >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: `if(typeof __name==="undefined"){globalThis.__name=function(fn){return fn}}` }} />
+      </head>
       <body className="min-h-full flex flex-col font-sans">
         <ThemeProvider attribute="class" defaultTheme="light" disableTransitionOnChange>
           {children}
