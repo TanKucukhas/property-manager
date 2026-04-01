@@ -21,7 +21,7 @@ export async function POST(request: Request) {
     const data = parsed.data;
     const { score, flags } = scorePrescreening(data);
 
-    const result = db.insert(prescreenings).values({
+    const result = await db.insert(prescreenings).values({
       ...data,
       petsJson: data.petsJson || null,
       currentHousingPayment: data.currentHousingPayment ?? null,
@@ -71,6 +71,6 @@ export async function GET() {
   }
 
   const db = await getDb();
-  const records = db.select().from(prescreenings).orderBy(desc(prescreenings.createdAt)).all();
+  const records = await db.select().from(prescreenings).orderBy(desc(prescreenings.createdAt)).all();
   return NextResponse.json(records);
 }

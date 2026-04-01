@@ -14,7 +14,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Validation failed", details: parsed.error.flatten() }, { status: 400 });
     }
 
-    const result = db.insert(maintenanceRequests).values(parsed.data).returning().get();
+    const result = await db.insert(maintenanceRequests).values(parsed.data).returning().get();
     return NextResponse.json({ success: true, id: result.id });
   } catch {
     return NextResponse.json({ error: "Server error" }, { status: 500 });
@@ -25,6 +25,6 @@ export async function GET() {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const db = await getDb();
-  const records = db.select().from(maintenanceRequests).orderBy(desc(maintenanceRequests.createdAt)).all();
+  const records = await db.select().from(maintenanceRequests).orderBy(desc(maintenanceRequests.createdAt)).all();
   return NextResponse.json(records);
 }

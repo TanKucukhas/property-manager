@@ -9,7 +9,7 @@ export async function GET() {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const db = await getDb();
-  const records = db.select().from(tenants).orderBy(desc(tenants.createdAt)).all();
+  const records = await db.select().from(tenants).orderBy(desc(tenants.createdAt)).all();
   return NextResponse.json(records);
 }
 
@@ -24,6 +24,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Validation failed", details: parsed.error.flatten() }, { status: 400 });
   }
 
-  const result = db.insert(tenants).values(parsed.data).returning().get();
+  const result = await db.insert(tenants).values(parsed.data).returning().get();
   return NextResponse.json(result);
 }

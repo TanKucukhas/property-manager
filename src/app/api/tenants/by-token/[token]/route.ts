@@ -7,7 +7,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tok
   const { token } = await params;
   const db = await getDb();
 
-  const tenant = db.select({
+  const tenant = await db.select({
     id: tenants.id,
     fullName: tenants.fullName,
     email: tenants.email,
@@ -21,7 +21,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tok
   }
 
   const property = tenant.propertyId
-    ? db.select({ name: properties.name, address1: properties.address1 }).from(properties).where(eq(properties.id, tenant.propertyId)).get()
+    ? await db.select({ name: properties.name, address1: properties.address1 }).from(properties).where(eq(properties.id, tenant.propertyId)).get()
     : null;
 
   return NextResponse.json({

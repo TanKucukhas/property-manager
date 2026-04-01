@@ -17,7 +17,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return NextResponse.json({ error: "Validation failed" }, { status: 400 });
   }
 
-  db.update(payments).set({ ...parsed.data, updatedAt: new Date().toISOString() }).where(eq(payments.id, parseInt(id))).run();
+  await db.update(payments).set({ ...parsed.data, updatedAt: new Date().toISOString() }).where(eq(payments.id, parseInt(id))).run();
   return NextResponse.json({ success: true });
 }
 
@@ -26,6 +26,6 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const db = await getDb();
   const { id } = await params;
-  db.delete(payments).where(eq(payments.id, parseInt(id))).run();
+  await db.delete(payments).where(eq(payments.id, parseInt(id))).run();
   return NextResponse.json({ success: true });
 }

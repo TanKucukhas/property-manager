@@ -15,7 +15,7 @@ export async function POST(request: Request) {
     }
 
     const { email, password } = parsed.data;
-    const admin = db.select().from(admins).where(eq(admins.email, email)).get();
+    const admin = await db.select().from(admins).where(eq(admins.email, email)).get();
     if (!admin) {
       return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
     }

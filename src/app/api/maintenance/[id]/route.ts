@@ -18,6 +18,6 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (priority) updates.priority = priority;
   if (adminNotes !== undefined) updates.adminNotes = adminNotes;
 
-  db.update(maintenanceRequests).set(updates).where(eq(maintenanceRequests.id, parseInt(id))).run();
+  await db.update(maintenanceRequests).set(updates).where(eq(maintenanceRequests.id, parseInt(id))).run();
   return NextResponse.json({ success: true });
 }

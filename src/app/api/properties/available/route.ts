@@ -5,7 +5,7 @@ import { eq } from "drizzle-orm";
 
 export async function GET() {
   const db = await getDb();
-  const records = db
+  const records = await db
     .select({
       id: properties.id,
       name: properties.name,
