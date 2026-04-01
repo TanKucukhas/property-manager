@@ -94,7 +94,7 @@ export default function HomePage() {
           <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {[
               { icon: DollarSign, title: "Income", desc: "Gross monthly household income of at least 2.75x rent" },
-              { icon: ShieldCheck, title: "Credit Score", desc: "Minimum credit score of 675" },
+              { icon: ShieldCheck, title: "Credit Check", desc: "Credit and background screening required" },
               { icon: DollarSign, title: "Move-in Funds", desc: "First month's rent + security deposit due at signing" },
               { icon: CheckCircle2, title: "Background Check", desc: "Willingness to complete a $47 screening" },
               { icon: Home, title: "Full-time Residence", desc: "No subleasing, no Airbnb, no short-term rentals" },

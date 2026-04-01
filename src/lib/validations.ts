@@ -159,16 +159,19 @@ export function scorePrescreening(data: z.infer<typeof prescreeningSchema>): {
 
   // Credit score (0-25 points)
   const creditMap: Record<string, number> = {
-    "750+": 25,
+    "800+": 25,
+    "750-799": 23,
     "700-749": 20,
-    "675-699": 15,
-    "650-674": 0,
-    "below-650": 0,
+    "650-699": 15,
+    "600-649": 8,
+    "550-599": 3,
+    "500-549": 0,
+    "below-500": 0,
     "unknown": 5,
   };
   score += creditMap[data.creditScoreRange] ?? 0;
-  if (["650-674", "below-650"].includes(data.creditScoreRange)) {
-    reasons.push("Credit score below 675 minimum");
+  if (["500-549", "below-500"].includes(data.creditScoreRange)) {
+    reasons.push("Low credit score");
   }
 
   // Income (0-25 points)
@@ -211,7 +214,7 @@ export function scorePrescreening(data: z.infer<typeof prescreeningSchema>): {
 
   // Auto-reject triggers (non-negotiable lease standards)
   const autoReject =
-    ["650-674", "below-650"].includes(data.creditScoreRange) ||
+    ["500-549", "below-500"].includes(data.creditScoreRange) ||
     data.monthlyIncome < INCOME_THRESHOLD ||
     !data.canPayMoveIn ||
     data.priorEviction ||

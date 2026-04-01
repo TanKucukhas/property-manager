@@ -153,6 +153,8 @@ export default function ApplyPage() {
   const [properties, setProperties] = useState<AvailableProperty[]>([]);
   const [selectedProp, setSelectedProp] = useState<AvailableProperty | null>(null);
   const [occupantNames, setOccupantNames] = useState<string[]>([]);
+  const [numPets, setNumPets] = useState(0);
+  const [petList, setPetList] = useState<{ type: string; breed: string; weight: string; age: string }[]>([]);
 
   useEffect(() => {
     fetch("/api/properties/available").then(r => r.json()).then(d => setProperties(Array.isArray(d) ? d : [])).catch(() => {});
@@ -180,6 +182,16 @@ export default function ApplyPage() {
 
   // Validate all occupant names are filled
   const allOccupantsFilled = occupantNames.length > 0 && occupantNames.every(n => n.trim().length > 0);
+
+  // Sync pet list with numPets
+  useEffect(() => {
+    setPetList(prev => {
+      const next = [...prev];
+      while (next.length < numPets) next.push({ type: "", breed: "", weight: "", age: "" });
+      while (next.length > numPets) next.pop();
+      return next;
+    });
+  }, [numPets]);
   const lateRent = watch("lateRentPayments");
   const hasPets = watch("hasPets");
   const broken = watch("brokenLease");
@@ -255,7 +267,7 @@ export default function ApplyPage() {
         intentToSublease: data.intentToSublease === "true",
         intentToAirbnb: data.intentToAirbnb === "true",
         hasPets: data.hasPets === "true",
-        petsJson: data.petDetails ? JSON.stringify({ details: data.petDetails, houseTrained: data.petsHouseTrained, causedDamage: data.petsCausedDamage }) : undefined,
+        petsJson: petList.length > 0 ? JSON.stringify({ pets: petList, houseTrained: data.petsHouseTrained, causedDamage: data.petsCausedDamage }) : undefined,
         smoking: data.anyoneSmokeVape === "true",
         willingToMaintain: data.willingToMaintain === "true",
         willingToHandleUtilities: data.willingToHandleUtilities === "true",
@@ -331,7 +343,7 @@ export default function ApplyPage() {
               <div className="grid gap-3 sm:grid-cols-3">
                 <div className="flex items-center gap-3 rounded-xl border p-4">
                   <ShieldCheck className="h-6 w-6 text-primary shrink-0" />
-                  <div><p className="font-semibold text-sm">Credit</p><p className="text-xs text-muted-foreground">675+ minimum</p></div>
+                  <div><p className="font-semibold text-sm">Credit</p><p className="text-xs text-muted-foreground">Score checked</p></div>
                 </div>
                 <div className="flex items-center gap-3 rounded-xl border p-4">
                   <DollarSign className="h-6 w-6 text-primary shrink-0" />
@@ -383,7 +395,6 @@ export default function ApplyPage() {
                   </div>
                   <div className="border-t pt-3 mt-3 text-sm text-muted-foreground space-y-1">
                     <p>Min. income: <strong>${(selectedProp.monthlyRent * 2.75).toLocaleString()}/mo</strong> (2.75x rent)</p>
-                    <p>Min. credit score: <strong>675</strong></p>
                     <p>No subleasing or Airbnb. Pets case-by-case.</p>
                   </div>
                 </div>
@@ -625,15 +636,17 @@ export default function ApplyPage() {
                 <Label htmlFor="creditScoreRange" required>Estimated Credit Score</Label>
                 <select id="creditScoreRange" className={select} {...register("creditScoreRange", { required: "Required" })}>
                   <option value="">Select...</option>
-                  <option value="750+">750+</option>
+                  <option value="800+">800+</option>
+                  <option value="750-799">750 - 799</option>
                   <option value="700-749">700 - 749</option>
-                  <option value="675-699">675 - 699</option>
-                  <option value="650-674">650 - 674</option>
-                  <option value="below-650">Below 650</option>
+                  <option value="650-699">650 - 699</option>
+                  <option value="600-649">600 - 649</option>
+                  <option value="550-599">550 - 599</option>
+                  <option value="500-549">500 - 549</option>
+                  <option value="below-500">Below 500</option>
                   <option value="unknown">I don&apos;t know</option>
                 </select>
                 <Err msg={errors.creditScoreRange?.message} />
-                <p className="text-sm text-muted-foreground mt-1">Minimum requirement: 675</p>
               </div>
               <div>
                 <Label required>Willing to complete a $47 background & credit screening?</Label>
@@ -734,11 +747,72 @@ export default function ApplyPage() {
               {hasPets === "true" && (
                 <>
                   <div>
-                    <Label htmlFor="petDetails">Pet Details (type, breed, weight, age)</Label>
-                    <textarea id="petDetails" className={textarea} placeholder="e.g. Dog, Golden Retriever, 65 lbs, 3 years" {...register("petDetails")} />
+                    <Label required>How many pets?</Label>
+                    <select
+                      className={select}
+                      value={numPets}
+                      onChange={(e) => setNumPets(parseInt(e.target.value))}
+                    >
+                      <option value={0}>Select...</option>
+                      {[1, 2, 3, 4, 5].map(n => (
+                        <option key={n} value={n}>{n}</option>
+                      ))}
+                    </select>
                   </div>
-                  <div><Label>Pets house-trained?</Label><YesNo name="petsHouseTrained" /></div>
-                  <div><Label>Pets caused property damage?</Label><YesNo name="petsCausedDamage" /></div>
+
+                  {petList.map((pet, i) => (
+                    <div key={i} className="rounded-xl border p-4 space-y-4">
+                      <p className="font-semibold">Pet {i + 1}</p>
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <div>
+                          <Label>Type</Label>
+                          <select
+                            className={select}
+                            value={pet.type}
+                            onChange={(e) => {
+                              const updated = [...petList];
+                              updated[i] = { ...updated[i], type: e.target.value };
+                              setPetList(updated);
+                            }}
+                          >
+                            <option value="">Select...</option>
+                            <option value="dog">Dog</option>
+                            <option value="cat">Cat</option>
+                            <option value="bird">Bird</option>
+                            <option value="fish">Fish</option>
+                            <option value="reptile">Reptile</option>
+                            <option value="small-animal">Small Animal (hamster, rabbit, etc.)</option>
+                            <option value="other">Other</option>
+                          </select>
+                        </div>
+                        <div>
+                          <Label>Breed</Label>
+                          <input className={input} placeholder="e.g. Golden Retriever" value={pet.breed} onChange={(e) => {
+                            const updated = [...petList]; updated[i] = { ...updated[i], breed: e.target.value }; setPetList(updated);
+                          }} />
+                        </div>
+                        <div>
+                          <Label>Weight (lbs)</Label>
+                          <input className={input} placeholder="e.g. 65" value={pet.weight} onChange={(e) => {
+                            const updated = [...petList]; updated[i] = { ...updated[i], weight: e.target.value }; setPetList(updated);
+                          }} />
+                        </div>
+                        <div>
+                          <Label>Age</Label>
+                          <input className={input} placeholder="e.g. 3 years" value={pet.age} onChange={(e) => {
+                            const updated = [...petList]; updated[i] = { ...updated[i], age: e.target.value }; setPetList(updated);
+                          }} />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+
+                  {numPets > 0 && (
+                    <>
+                      <div><Label>Are all pets house-trained?</Label><YesNo name="petsHouseTrained" /></div>
+                      <div><Label>Have any pets caused property damage?</Label><YesNo name="petsCausedDamage" /></div>
+                    </>
+                  )}
                 </>
               )}
 
