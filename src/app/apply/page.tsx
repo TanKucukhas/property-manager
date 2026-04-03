@@ -96,7 +96,7 @@ const STEP_TITLES = [
   "Move-in Details",
   "Employment",
   "Income & Funds",
-  "Credit & Screening",
+  "Additional Info",
   "Rental History",
   "Rental Background",
   "Property Use & Pets",
@@ -114,7 +114,7 @@ const STEP_REQUIRED: (keyof FormData)[][] = [
   ["currentAddress", "desiredMoveIn", "occupantNames"],                   // 3  Move-in
   ["employmentStatus"],                                                   // 4  Employment
   ["grossMonthlyIncome", "incomeExceeds", "canProveIncome", "canPayMoveIn", "lateRentPayments"], // 5 Income
-  ["creditScoreRange", "allAdultsWillingToScreen"],     // 6  Credit
+  ["allAdultsWillingToScreen"],     // 6  Additional Info
   ["currentHousingStatus"],                                               // 7  Rental History
   [],                                                                     // 8  Rental Background
   ["fullTimeResidence", "intentToSublease", "intentToAirbnb", "hasPets"], // 9  Property Use & Pets
@@ -247,7 +247,7 @@ export default function ApplyPage() {
         canPayMoveIn: data.canPayMoveIn === "true",
         latePayments: data.lateRentPayments === "true",
         latePaymentsExplanation: data.lateRentExplanation,
-        creditScoreRange: data.creditScoreRange,
+        creditScoreRange: "unknown",
         screeningConsent: true,
         allAdultsWillingToScreen: data.allAdultsWillingToScreen === "true",
         creditIssuesDisclosure: data.creditIssuesDisclosure,
@@ -343,7 +343,7 @@ export default function ApplyPage() {
               <div className="grid gap-3 sm:grid-cols-3">
                 <div className="flex items-center gap-3 rounded-xl border p-4">
                   <ShieldCheck className="h-6 w-6 text-primary shrink-0" />
-                  <div><p className="font-semibold text-sm">Credit</p><p className="text-xs text-muted-foreground">Score checked</p></div>
+                  <div><p className="font-semibold text-sm">Free</p><p className="text-xs text-muted-foreground">No credit check</p></div>
                 </div>
                 <div className="flex items-center gap-3 rounded-xl border p-4">
                   <DollarSign className="h-6 w-6 text-primary shrink-0" />
@@ -627,26 +627,13 @@ export default function ApplyPage() {
           </Card>
         )}
 
-        {/* ── STEP 6: Credit ── */}
+        {/* ── STEP 6: Additional Info ── */}
         {step === 6 && (
           <Card>
-            <CardHeader><CardTitle className="text-2xl">Credit & Screening</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-2xl">Additional Information</CardTitle></CardHeader>
             <CardContent className="space-y-6">
-              <div>
-                <Label htmlFor="creditScoreRange" required>Estimated Credit Score</Label>
-                <select id="creditScoreRange" className={select} {...register("creditScoreRange", { required: "Required" })}>
-                  <option value="">Select...</option>
-                  <option value="800+">800+</option>
-                  <option value="750-799">750 - 799</option>
-                  <option value="700-749">700 - 749</option>
-                  <option value="650-699">650 - 699</option>
-                  <option value="600-649">600 - 649</option>
-                  <option value="550-599">550 - 599</option>
-                  <option value="500-549">500 - 549</option>
-                  <option value="below-500">Below 500</option>
-                  <option value="unknown">I don&apos;t know</option>
-                </select>
-                <Err msg={errors.creditScoreRange?.message} />
+              <div className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-800">
+                This is not a credit check. This form is completely free and does not affect your credit score in any way.
               </div>
               <div>
                 <Label required>All adult occupants willing to complete separate screening if requested?</Label>
@@ -654,7 +641,7 @@ export default function ApplyPage() {
                 <Err msg={errors.allAdultsWillingToScreen?.message} />
               </div>
               <div>
-                <Label htmlFor="creditIssuesDisclosure">Any bankruptcies, collections, or credit issues to disclose?</Label>
+                <Label htmlFor="creditIssuesDisclosure">Anything you would like us to know before we review your application?</Label>
                 <textarea id="creditIssuesDisclosure" className={textarea} placeholder="Optional" {...register("creditIssuesDisclosure")} />
               </div>
             </CardContent>
