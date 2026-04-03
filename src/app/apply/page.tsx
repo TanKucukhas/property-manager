@@ -114,7 +114,7 @@ const STEP_REQUIRED: (keyof FormData)[][] = [
   ["currentAddress", "desiredMoveIn", "occupantNames"],                   // 3  Move-in
   ["employmentStatus"],                                                   // 4  Employment
   ["grossMonthlyIncome", "incomeExceeds", "canProveIncome", "canPayMoveIn", "lateRentPayments"], // 5 Income
-  ["creditScoreRange", "willingToScreen", "allAdultsWillingToScreen"],     // 6  Credit
+  ["creditScoreRange", "allAdultsWillingToScreen"],     // 6  Credit
   ["currentHousingStatus"],                                               // 7  Rental History
   [],                                                                     // 8  Rental Background
   ["fullTimeResidence", "intentToSublease", "intentToAirbnb", "hasPets"], // 9  Property Use & Pets
@@ -248,7 +248,7 @@ export default function ApplyPage() {
         latePayments: data.lateRentPayments === "true",
         latePaymentsExplanation: data.lateRentExplanation,
         creditScoreRange: data.creditScoreRange,
-        screeningConsent: data.willingToScreen === "true",
+        screeningConsent: true,
         allAdultsWillingToScreen: data.allAdultsWillingToScreen === "true",
         creditIssuesDisclosure: data.creditIssuesDisclosure,
         housingStatus: data.currentHousingStatus,
@@ -354,7 +354,7 @@ export default function ApplyPage() {
                   <div><p className="font-semibold text-sm">Move-in</p><p className="text-xs text-muted-foreground">First + deposit</p></div>
                 </div>
               </div>
-              <p className="text-sm text-muted-foreground">Takes 2-3 minutes. All adult occupants may need separate screening.</p>
+              <p className="text-sm text-muted-foreground">Takes 2-3 minutes. No fee required.</p>
             </CardContent>
           </Card>
         )}
@@ -647,11 +647,6 @@ export default function ApplyPage() {
                   <option value="unknown">I don&apos;t know</option>
                 </select>
                 <Err msg={errors.creditScoreRange?.message} />
-              </div>
-              <div>
-                <Label required>Willing to complete a $47 background & credit screening?</Label>
-                <YesNo name="willingToScreen" required />
-                <Err msg={errors.willingToScreen?.message} />
               </div>
               <div>
                 <Label required>All adult occupants willing to complete separate screening if requested?</Label>
