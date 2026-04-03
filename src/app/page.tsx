@@ -29,9 +29,16 @@ export default function HomePage() {
           </h1>
           <p className="mt-6 text-lg text-muted-foreground sm:text-xl max-w-2xl mx-auto">
             We make the rental process simple, transparent, and fair. Pre-screen in minutes,
-            not hours. No fee to apply. Only qualified applicants move forward.
+            not hours. Only qualified applicants move forward.
           </p>
-          <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
+
+          <div className="mt-8 mx-auto max-w-lg rounded-2xl border-2 border-green-200 bg-green-50 p-6 text-center">
+            <p className="text-xl font-bold text-green-800 sm:text-2xl">100% Free to Apply</p>
+            <p className="mt-2 text-green-700 font-medium">No credit check. No fees. Won&apos;t affect your credit score.</p>
+            <p className="mt-1 text-sm text-green-600">Just a quick form — takes 2-3 minutes.</p>
+          </div>
+
+          <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link href="/apply">
               <Button size="lg" className="h-14 px-10 text-lg font-semibold">
                 <ClipboardList className="mr-2 h-5 w-5" />
@@ -39,9 +46,6 @@ export default function HomePage() {
               </Button>
             </Link>
           </div>
-          <p className="mt-4 text-sm text-muted-foreground">
-            Takes 2-3 minutes. No fee required.
-          </p>
         </div>
       </section>
 
