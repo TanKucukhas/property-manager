@@ -32,3 +32,19 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   await db.update(prescreenings).set(updates).where(eq(prescreenings.id, parseInt(id))).run();
   return NextResponse.json({ success: true });
 }
+
+export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const db = await getDb();
+  const { id } = await params;
+  const parsedId = parseInt(id);
+  if (Number.isNaN(parsedId)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+
+  const existing = await db.select().from(prescreenings).where(eq(prescreenings.id, parsedId)).get();
+  if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  await db.delete(prescreenings).where(eq(prescreenings.id, parsedId)).run();
+  return NextResponse.json({ success: true });
+}

@@ -64,6 +64,7 @@ export default function PrescreeningPage() {
   const [editNotes, setEditNotes] = useState("")
   const [editRating, setEditRating] = useState(0)
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   async function loadRecords() {
     try {
@@ -86,6 +87,22 @@ export default function PrescreeningPage() {
     setEditNotes(record.adminNotes || "")
     setEditRating(record.adminRating ?? 0)
     setDialogOpen(true)
+  }
+
+  async function handleDelete() {
+    if (!selected) return
+    if (!confirm(`Delete application from ${getName(selected)}? This cannot be undone.`)) return
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/prescreening/${selected.id}`, { method: "DELETE" })
+      if (!res.ok) throw new Error("Failed to delete")
+      setDialogOpen(false)
+      loadRecords()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Delete failed")
+    } finally {
+      setDeleting(false)
+    }
   }
 
   async function handleSave() {
@@ -144,8 +161,15 @@ export default function PrescreeningPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {records.map((r) => {
+              {[...records]
+                .sort((a, b) => {
+                  const aEff = a.adminRating == null ? (a.score ?? 0) : (a.score ?? 0) + a.adminRating
+                  const bEff = b.adminRating == null ? (b.score ?? 0) : (b.score ?? 0) + b.adminRating
+                  return bEff - aEff
+                })
+                .map((r) => {
                 const sc = statusColors[r.status] || statusColors.new
+                const unscored = r.adminRating == null
                 return (
                   <TableRow
                     key={r.id}
@@ -157,8 +181,14 @@ export default function PrescreeningPage() {
                     <TableCell className="hidden md:table-cell">{r.creditScoreRange ?? "-"}</TableCell>
                     <TableCell className="hidden md:table-cell">{formatCurrency(r.monthlyIncome)}</TableCell>
                     <TableCell className="hidden lg:table-cell">
-                      <span className="font-medium">{(r.score ?? 0) + (r.adminRating ?? 0)}</span>
-                      <span className="text-xs text-muted-foreground">/100</span>
+                      {unscored ? (
+                        <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-800">Unscored</Badge>
+                      ) : (
+                        <>
+                          <span className="font-medium">{(r.score ?? 0) + (r.adminRating ?? 0)}</span>
+                          <span className="text-xs text-muted-foreground">/100</span>
+                        </>
+                      )}
                     </TableCell>
                     <TableCell>
                       <Badge variant={sc.variant} className={sc.className}>
@@ -254,13 +284,22 @@ export default function PrescreeningPage() {
               </div>
             </div>
           )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>
-              Cancel
+          <DialogFooter className="sm:justify-between">
+            <Button
+              variant="destructive"
+              onClick={handleDelete}
+              disabled={deleting || saving}
+            >
+              {deleting ? "Deleting..." : "Delete"}
             </Button>
-            <Button onClick={handleSave} disabled={saving}>
-              {saving ? "Saving..." : "Save Changes"}
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleSave} disabled={saving || deleting}>
+                {saving ? "Saving..." : "Save Changes"}
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
