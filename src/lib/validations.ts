@@ -140,7 +140,7 @@ export const leaseTermsSchema = z.object({
 });
 
 // Prescreening scoring — informational only, no auto-reject
-// Total: 80 from form + 20 from admin rating = 100
+// Total: 80 from form + admin rating (0-10, ×2 weight) = 100
 // Consent fields are flags, not scored — you either consent or you don't
 const INCOME_THRESHOLD = 3437.50;
 
@@ -194,7 +194,7 @@ export function scorePrescreening(data: z.infer<typeof prescreeningSchema>): {
   if (!data.fullTimeResidence) flags.push("Not full-time residence");
   if (data.smoking) flags.push("Smoker/vaper in household");
 
-  // Admin rating adds up to 20 points (set manually in admin panel)
+  // Admin rates 0-10 (×2 = up to 20 effective points, set manually in admin panel)
   // Not calculated here — added when admin reviews
 
   return { score: Math.min(score, 80), flags };

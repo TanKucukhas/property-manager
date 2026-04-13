@@ -34,6 +34,12 @@ const statusColors: Record<string, { variant: "default" | "secondary" | "destruc
   review: { variant: "secondary", className: "bg-yellow-100 text-yellow-800" },
   "pre-approved": { variant: "secondary", className: "bg-green-100 text-green-800" },
   rejected: { variant: "secondary", className: "bg-red-100 text-red-800" },
+  "scheduled-for-showing": { variant: "secondary", className: "bg-indigo-100 text-indigo-800" },
+  "showing-completed": { variant: "secondary", className: "bg-purple-100 text-purple-800" },
+  "tenant-cancelled": { variant: "secondary", className: "bg-gray-100 text-gray-800" },
+  "tenant-accepted": { variant: "secondary", className: "bg-emerald-100 text-emerald-800" },
+  "credit-check-sent": { variant: "secondary", className: "bg-orange-100 text-orange-800" },
+  approved: { variant: "secondary", className: "bg-green-200 text-green-900" },
 }
 
 function formatDate(d: string | undefined) {
@@ -50,7 +56,31 @@ function formatCurrency(value: number | undefined) {
   }).format(value)
 }
 
-const statusOptions = ["new", "review", "pre-approved", "rejected"]
+const statusOptions = [
+  "new",
+  "review",
+  "pre-approved",
+  "scheduled-for-showing",
+  "showing-completed",
+  "tenant-cancelled",
+  "tenant-accepted",
+  "credit-check-sent",
+  "approved",
+  "rejected",
+]
+
+const statusLabels: Record<string, string> = {
+  new: "New",
+  review: "Review",
+  "pre-approved": "Pre-Approved",
+  "scheduled-for-showing": "Scheduled for Showing",
+  "showing-completed": "Showing Completed",
+  "tenant-cancelled": "Tenant Cancelled",
+  "tenant-accepted": "Tenant Accepted",
+  "credit-check-sent": "Credit Check Sent",
+  approved: "Approved",
+  rejected: "Rejected",
+}
 
 const hiddenFields = new Set(["id", "status", "notes", "createdAt", "updatedAt", "date", "_id"])
 
@@ -163,8 +193,8 @@ export default function PrescreeningPage() {
             <TableBody>
               {[...records]
                 .sort((a, b) => {
-                  const aEff = a.adminRating == null ? (a.score ?? 0) : (a.score ?? 0) + a.adminRating
-                  const bEff = b.adminRating == null ? (b.score ?? 0) : (b.score ?? 0) + b.adminRating
+                  const aEff = a.adminRating == null ? (a.score ?? 0) : (a.score ?? 0) + a.adminRating * 2
+                  const bEff = b.adminRating == null ? (b.score ?? 0) : (b.score ?? 0) + b.adminRating * 2
                   return bEff - aEff
                 })
                 .map((r) => {
@@ -185,14 +215,14 @@ export default function PrescreeningPage() {
                         <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-800">Unscored</Badge>
                       ) : (
                         <>
-                          <span className="font-medium">{(r.score ?? 0) + (r.adminRating ?? 0)}</span>
+                          <span className="font-medium">{(r.score ?? 0) + (r.adminRating ?? 0) * 2}</span>
                           <span className="text-xs text-muted-foreground">/100</span>
                         </>
                       )}
                     </TableCell>
                     <TableCell>
                       <Badge variant={sc.variant} className={sc.className}>
-                        {r.status}
+                        {statusLabels[r.status] || r.status}
                       </Badge>
                     </TableCell>
                     <TableCell className="hidden lg:table-cell">{formatDate(r.createdAt || r.date)}</TableCell>
@@ -232,25 +262,25 @@ export default function PrescreeningPage() {
               <div className="rounded-lg border bg-muted/30 p-3">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium">Total Score</span>
-                  <span className="text-2xl font-bold">{(selected.score ?? 0) + editRating}<span className="text-sm font-normal text-muted-foreground">/100</span></span>
+                  <span className="text-2xl font-bold">{(selected.score ?? 0) + editRating * 2}<span className="text-sm font-normal text-muted-foreground">/100</span></span>
                 </div>
                 <div className="flex items-center justify-between text-xs text-muted-foreground mt-1">
-                  <span>Form: {selected.score ?? 0}/80</span>
-                  <span>Your rating: {editRating}/20</span>
+                  <span>System: {selected.score ?? 0}/80</span>
+                  <span>Your rating: {editRating}/10</span>
                 </div>
                 <div className="h-2 w-full rounded-full bg-muted mt-2 overflow-hidden">
-                  <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${(selected.score ?? 0) + editRating}%` }} />
+                  <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${(selected.score ?? 0) + editRating * 2}%` }} />
                 </div>
               </div>
 
               {/* Admin rating */}
               <div className="flex flex-col gap-2">
-                <Label>Your Rating (0-20)</Label>
+                <Label>Your Rating (0-10)</Label>
                 <div className="flex items-center gap-3">
                   <input
                     type="range"
                     min={0}
-                    max={20}
+                    max={10}
                     value={editRating}
                     onChange={(e) => setEditRating(parseInt(e.target.value))}
                     className="flex-1 h-2 accent-primary"
@@ -268,7 +298,7 @@ export default function PrescreeningPage() {
                   onChange={(e) => setEditStatus(e.target.value)}
                 >
                   {statusOptions.map((s) => (
-                    <option key={s} value={s}>{s}</option>
+                    <option key={s} value={s}>{statusLabels[s] || s}</option>
                   ))}
                 </select>
               </div>

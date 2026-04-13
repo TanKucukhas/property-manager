@@ -27,7 +27,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const updates: Record<string, unknown> = { updatedAt: new Date().toISOString() };
   if (status) updates.status = status;
   if (adminNotes !== undefined) updates.adminNotes = adminNotes;
-  if (adminRating !== undefined) updates.adminRating = Math.min(Math.max(parseInt(adminRating) || 0, 0), 20);
+  if (adminRating !== undefined) updates.adminRating = Math.min(Math.max(parseInt(adminRating) || 0, 0), 10);
 
   await db.update(prescreenings).set(updates).where(eq(prescreenings.id, parseInt(id))).run();
   return NextResponse.json({ success: true });
