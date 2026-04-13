@@ -127,4 +127,12 @@
   html {
     @apply font-sans;
   }
+  input[type="range"] {
+    outline: none !important;
+    box-shadow: none !important;
+  }
+  input[type="range"]:focus {
+    outline: none !important;
+    box-shadow: none !important;
+  }
 }
