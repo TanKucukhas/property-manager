@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { prescreenings } from "@/db/schema";
+import { prescreenings, shareVisits } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
 
@@ -22,7 +22,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const db = await getDb();
   const { id } = await params;
   const body = await request.json();
-  const { status, adminNotes, adminRating, rejectReason, showingDate, showingTime } = body;
+  const { status, adminNotes, adminRating, rejectReason, showingDate, showingTime, aiAnalysis } = body;
 
   const updates: Record<string, unknown> = { updatedAt: new Date().toISOString() };
   if (status) updates.status = status;
@@ -33,6 +33,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (showingDate !== undefined) updates.showingDate = showingDate;
   if (showingTime !== undefined) updates.showingTime = showingTime;
   if (status && status !== "scheduled-for-showing") { updates.showingDate = null; updates.showingTime = null; }
+  if (aiAnalysis !== undefined) {
+    updates.aiAnalysis = aiAnalysis === null ? null : (typeof aiAnalysis === "string" ? aiAnalysis : JSON.stringify(aiAnalysis));
+    updates.aiAnalysisDate = aiAnalysis === null ? null : new Date().toISOString();
+  }
 
   await db.update(prescreenings).set(updates).where(eq(prescreenings.id, parseInt(id))).run();
   return NextResponse.json({ success: true });
@@ -42,14 +46,27 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const db = await getDb();
-  const { id } = await params;
-  const parsedId = parseInt(id);
-  if (Number.isNaN(parsedId)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+  try {
+    const db = await getDb();
+    const { id } = await params;
+    const parsedId = parseInt(id);
+    if (Number.isNaN(parsedId)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
 
-  const existing = await db.select().from(prescreenings).where(eq(prescreenings.id, parsedId)).get();
-  if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    const existing = await db.select().from(prescreenings).where(eq(prescreenings.id, parsedId)).get();
+    if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  await db.delete(prescreenings).where(eq(prescreenings.id, parsedId)).run();
-  return NextResponse.json({ success: true });
+    // share_visits.submitted_prescreening_id references prescreenings(id) without ON DELETE,
+    // so we must null the reference before the delete or the FK constraint fires.
+    await db
+      .update(shareVisits)
+      .set({ submittedPrescreeningId: null })
+      .where(eq(shareVisits.submittedPrescreeningId, parsedId))
+      .run();
+
+    await db.delete(prescreenings).where(eq(prescreenings.id, parsedId)).run();
+    return NextResponse.json({ success: true });
+  } catch (e) {
+    console.error("Delete prescreening failed", e);
+    return NextResponse.json({ error: "Server error" }, { status: 500 });
+  }
 }

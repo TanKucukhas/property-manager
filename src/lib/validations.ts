@@ -5,6 +5,15 @@ export const loginSchema = z.object({
   password: z.string().min(1, "Password required"),
 });
 
+export const pmSignupSchema = z.object({
+  name: z.string().min(2, "Your name is required"),
+  email: z.string().email("Valid email required"),
+  company: z.string().optional(),
+  phone: z.string().optional(),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+  notes: z.string().max(1000).optional(),
+});
+
 export const prescreeningSchema = z.object({
   propertyId: z.coerce.number().optional(),
   fullName: z.string().min(2, "Full legal name required"),
@@ -58,6 +67,18 @@ export const prescreeningSchema = z.object({
   screeningConsent: z.coerce.boolean(),
   moveReason: z.string().optional(),
   additionalNotes: z.string().optional(),
+  usingVoucher: z.enum(["yes", "no", "not_sure"]).optional(),
+  voucherAgency: z.string().optional(),
+  voucherBedroomSize: z.string().optional(),
+  voucherExpiration: z.string().optional(),
+  voucherApprovedRent: z.coerce.number().optional(),
+  voucherTenantPortion: z.coerce.number().optional(),
+  voucherCaseworkerName: z.string().optional(),
+  voucherCaseworkerPhone: z.string().optional(),
+  voucherCaseworkerEmail: z.string().optional(),
+  voucherHasRfta: z.enum(["yes", "no", "not_sure"]).optional(),
+  shareToken: z.string().optional(),
+  visitorId: z.string().optional(),
 });
 
 export const maintenanceSchema = z.object({
@@ -70,6 +91,9 @@ export const maintenanceSchema = z.object({
   priority: z.string().default("medium"),
 });
 
+export const PETS_POLICIES = ["allowed", "case_by_case", "not_allowed"] as const;
+export type PetsPolicy = (typeof PETS_POLICIES)[number];
+
 export const propertySchema = z.object({
   name: z.string().min(1, "Property name required"),
   address1: z.string().min(1, "Address required"),
@@ -81,6 +105,14 @@ export const propertySchema = z.object({
   leaseType: z.string().default("fixed"),
   status: z.string().default("available"),
   leaseTermsSummary: z.string().optional(),
+  incomeMultiplier: z.coerce.number().min(0).max(20).default(2.75),
+  minCreditScore: z.coerce.number().int().min(300).max(850).nullable().optional(),
+  petsPolicy: z.enum(PETS_POLICIES).default("case_by_case"),
+  smokingAllowed: z.coerce.boolean().default(false),
+  subleaseAllowed: z.coerce.boolean().default(false),
+  airbnbAllowed: z.coerce.boolean().default(false),
+  acceptsVouchers: z.coerce.boolean().default(false),
+  customRequirements: z.string().max(2000).nullable().optional(),
 });
 
 export const tenantSchema = z.object({
@@ -142,14 +174,44 @@ export const leaseTermsSchema = z.object({
 // Prescreening scoring — informational only, no auto-reject
 // Total: 80 from form + admin rating (0-10, ×2 weight) = 100
 // Consent fields are flags, not scored — you either consent or you don't
-const INCOME_THRESHOLD = 3437.50;
 
-export function scorePrescreening(data: z.infer<typeof prescreeningSchema>): {
+// Lower bound of each credit-range bucket. Used to compare against a property's min_credit_score.
+const CREDIT_RANGE_LOWER: Record<string, number> = {
+  "800+": 800,
+  "750-799": 750,
+  "700-749": 700,
+  "650-699": 650,
+  "600-649": 600,
+  "550-599": 550,
+  "500-549": 500,
+  "below-500": 0,
+  "unknown": -1,
+};
+
+export interface PropertyQualifications {
+  monthlyRent: number;
+  incomeMultiplier?: number | null;
+  minCreditScore?: number | null;
+  petsPolicy?: PetsPolicy | string | null;
+  smokingAllowed?: boolean | null;
+  subleaseAllowed?: boolean | null;
+  airbnbAllowed?: boolean | null;
+}
+
+export function scorePrescreening(
+  data: z.infer<typeof prescreeningSchema>,
+  property?: PropertyQualifications | null,
+): {
   score: number;
   flags: string[];
+  incomeThreshold: number;
 } {
   let score = 0;
   const flags: string[] = [];
+
+  const multiplier = property?.incomeMultiplier ?? 2.75;
+  // Fall back to old global threshold (2.75 × $1,250) so historical applications without a property still score.
+  const incomeThreshold = property ? property.monthlyRent * multiplier : 3437.5;
 
   // Credit (0-25)
   const creditMap: Record<string, number> = {
@@ -164,14 +226,25 @@ export function scorePrescreening(data: z.infer<typeof prescreeningSchema>): {
     "unknown": 0,
   };
   score += creditMap[data.creditScoreRange] ?? 0;
-  if (["500-549", "below-500"].includes(data.creditScoreRange)) flags.push("Low credit score");
   if (data.creditScoreRange === "unknown") flags.push("Credit score unknown");
+  if (property?.minCreditScore != null) {
+    const lower = CREDIT_RANGE_LOWER[data.creditScoreRange];
+    if (lower >= 0 && lower < property.minCreditScore) {
+      flags.push(`Credit below property minimum (${property.minCreditScore})`);
+    }
+  } else if (["500-549", "below-500"].includes(data.creditScoreRange)) {
+    flags.push("Low credit score");
+  }
 
   // Income (0-25)
-  if (data.monthlyIncome >= INCOME_THRESHOLD * 1.2) score += 25;
-  else if (data.monthlyIncome >= INCOME_THRESHOLD) score += 20;
-  else if (data.monthlyIncome >= INCOME_THRESHOLD * 0.8) { score += 10; flags.push("Income below 2.75x rent"); }
-  else { flags.push("Income significantly below threshold"); }
+  if (data.monthlyIncome >= incomeThreshold * 1.2) score += 25;
+  else if (data.monthlyIncome >= incomeThreshold) score += 20;
+  else if (data.monthlyIncome >= incomeThreshold * 0.8) {
+    score += 10;
+    flags.push(`Income below ${multiplier}x rent`);
+  } else {
+    flags.push("Income significantly below threshold");
+  }
 
   // Move-in readiness (0-10)
   if (data.canPayMoveIn) score += 10;
@@ -186,16 +259,19 @@ export function scorePrescreening(data: z.infer<typeof prescreeningSchema>): {
   if (data.propertyDamageHistory) { rentalScore -= 2; flags.push("Property damage history"); }
   score += Math.max(rentalScore, 0);
 
-  // Flags only — no points, just info for admin
+  // Policy-gated flags — only flag if the property prohibits the behavior.
   if (!data.screeningConsent) flags.push("Refuses screening");
   if (data.allAdultsWillingToScreen === false) flags.push("Not all adults willing to screen");
-  if (data.intentToSublease) flags.push("Intends to sublease");
-  if (data.intentToAirbnb) flags.push("Intends to Airbnb");
+  if (data.intentToSublease && !property?.subleaseAllowed) flags.push("Intends to sublease");
+  if (data.intentToAirbnb && !property?.airbnbAllowed) flags.push("Intends to Airbnb");
   if (!data.fullTimeResidence) flags.push("Not full-time residence");
-  if (data.smoking) flags.push("Smoker/vaper in household");
+  if (data.smoking && !property?.smokingAllowed) flags.push("Smoker/vaper in household");
+
+  // Pets policy
+  if (data.hasPets && property?.petsPolicy === "not_allowed") flags.push("Has pets — property does not allow pets");
 
   // Admin rates 0-10 (×2 = up to 20 effective points, set manually in admin panel)
   // Not calculated here — added when admin reviews
 
-  return { score: Math.min(score, 80), flags };
+  return { score: Math.min(score, 80), flags, incomeThreshold };
 }

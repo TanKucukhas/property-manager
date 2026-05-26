@@ -21,6 +21,14 @@ interface AvailableProperty {
   zip: string;
   monthlyRent: number;
   securityDeposit: number;
+  incomeMultiplier?: number | null;
+  minCreditScore?: number | null;
+  petsPolicy?: string | null;
+  smokingAllowed?: boolean | null;
+  subleaseAllowed?: boolean | null;
+  airbnbAllowed?: boolean | null;
+  acceptsVouchers?: boolean | null;
+  customRequirements?: string | null;
 }
 
 interface FormData {
@@ -83,6 +91,16 @@ interface FormData {
   falseInfoDisqualify: boolean;
   consentToContact: boolean;
   additionalNotes: string;
+  usingVoucher: string;
+  voucherAgency: string;
+  voucherBedroomSize: string;
+  voucherExpiration: string;
+  voucherApprovedRent: number | string;
+  voucherTenantPortion: number | string;
+  voucherCaseworkerName: string;
+  voucherCaseworkerPhone: string;
+  voucherCaseworkerEmail: string;
+  voucherHasRfta: string;
 }
 
 /* ------------------------------------------------------------------ */
@@ -155,15 +173,48 @@ export default function ApplyPage() {
   const [occupantNames, setOccupantNames] = useState<string[]>([]);
   const [numPets, setNumPets] = useState(0);
   const [petList, setPetList] = useState<{ type: string; breed: string; weight: string; age: string }[]>([]);
-
-  useEffect(() => {
-    fetch("/api/properties/available").then(r => r.json()).then(d => setProperties(Array.isArray(d) ? d : [])).catch(() => {});
-  }, []);
+  const [shareToken, setShareToken] = useState<string | null>(null);
+  const [visitorId, setVisitorId] = useState<string | null>(null);
+  const [propertyLockedByShare, setPropertyLockedByShare] = useState(false);
 
   const { register, handleSubmit, watch, trigger, setValue, formState: { errors, isSubmitting } } = useForm<FormData>({
     defaultValues: { numAdults: 1, numChildren: 0 },
     mode: "onTouched",
   });
+
+  useEffect(() => {
+    fetch("/api/properties/available").then(r => r.json()).then(d => setProperties(Array.isArray(d) ? d : [])).catch(() => {});
+    if (typeof window !== "undefined") {
+      const ref = new URLSearchParams(window.location.search).get("ref");
+      if (ref) {
+        setShareToken(ref);
+        let vid = localStorage.getItem("share-visitor-id");
+        if (!vid) {
+          vid = crypto.randomUUID();
+          localStorage.setItem("share-visitor-id", vid);
+        }
+        setVisitorId(vid);
+        fetch(`/api/shares/${encodeURIComponent(ref)}`)
+          .then((r) => (r.ok ? r.json() : null))
+          .then((s) => {
+            if (s && s.propertyId) {
+              setValue("propertyApplyingFor", String(s.propertyId));
+              setPropertyLockedByShare(true);
+            }
+          })
+          .catch(() => {});
+      }
+    }
+  }, [setValue]);
+
+  useEffect(() => {
+    if (!shareToken || !visitorId) return;
+    fetch(`/api/shares/${encodeURIComponent(shareToken)}/visit`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ visitorId, step: step + 1, totalSteps: TOTAL_STEPS }),
+    }).catch(() => {});
+  }, [step, shareToken, visitorId]);
 
   const propId = watch("propertyApplyingFor");
   const numAdults = watch("numAdults") || 1;
@@ -199,6 +250,7 @@ export default function ApplyPage() {
   const eviction = watch("evictionFiled");
   const owes = watch("oweMoneyToLandlord");
   const damage = watch("causedPropertyDamage");
+  const usingVoucher = watch("usingVoucher");
   const showExplanation = [broken, asked, eviction, owes, damage].some(v => v === "true");
 
   // Update selected property when dropdown changes
@@ -273,6 +325,24 @@ export default function ApplyPage() {
         willingToHandleUtilities: data.willingToHandleUtilities === "true",
         backgroundDisclosure: data.backgroundDisclosure,
         additionalNotes: data.additionalNotes,
+        usingVoucher: data.usingVoucher || undefined,
+        voucherAgency: data.usingVoucher === "yes" ? data.voucherAgency || undefined : undefined,
+        voucherBedroomSize: data.usingVoucher === "yes" ? data.voucherBedroomSize || undefined : undefined,
+        voucherExpiration: data.usingVoucher === "yes" ? data.voucherExpiration || undefined : undefined,
+        voucherApprovedRent:
+          data.usingVoucher === "yes" && data.voucherApprovedRent !== "" && data.voucherApprovedRent != null
+            ? Number(data.voucherApprovedRent)
+            : undefined,
+        voucherTenantPortion:
+          data.usingVoucher === "yes" && data.voucherTenantPortion !== "" && data.voucherTenantPortion != null
+            ? Number(data.voucherTenantPortion)
+            : undefined,
+        voucherCaseworkerName: data.usingVoucher === "yes" ? data.voucherCaseworkerName || undefined : undefined,
+        voucherCaseworkerPhone: data.usingVoucher === "yes" ? data.voucherCaseworkerPhone || undefined : undefined,
+        voucherCaseworkerEmail: data.usingVoucher === "yes" ? data.voucherCaseworkerEmail || undefined : undefined,
+        voucherHasRfta: data.usingVoucher === "yes" ? data.voucherHasRfta || undefined : undefined,
+        shareToken: shareToken || undefined,
+        visitorId: visitorId || undefined,
       };
       const res = await fetch("/api/prescreening", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "Submission failed");
@@ -310,8 +380,18 @@ export default function ApplyPage() {
   }
 
   const progress = ((step + 1) / TOTAL_STEPS) * 100;
-  const incomeReq = selectedProp ? (selectedProp.monthlyRent * 2.75).toFixed(2) : "3,437.50";
+  const incomeMultiplier = selectedProp?.incomeMultiplier ?? 2.75;
+  const incomeReq = selectedProp ? (selectedProp.monthlyRent * incomeMultiplier).toFixed(2) : "3,437.50";
   const moveInCost = selectedProp ? `$${(selectedProp.monthlyRent + selectedProp.securityDeposit).toLocaleString()}` : "$2,500";
+  const petsPolicyLabel: Record<string, string> = {
+    allowed: "Pets allowed",
+    case_by_case: "Pets case-by-case",
+    not_allowed: "No pets",
+  };
+  const customRequirementBullets = (selectedProp?.customRequirements ?? "")
+    .split("\n")
+    .map((s) => s.trim())
+    .filter(Boolean);
 
   return (
     <div className="mx-auto w-full max-w-2xl px-4 py-8 sm:py-12">
@@ -347,7 +427,10 @@ export default function ApplyPage() {
                 </div>
                 <div className="flex items-center gap-3 rounded-xl border p-4">
                   <DollarSign className="h-6 w-6 text-primary shrink-0" />
-                  <div><p className="font-semibold text-sm">Income</p><p className="text-xs text-muted-foreground">2.75x monthly rent</p></div>
+                  <div>
+                    <p className="font-semibold text-sm">Income</p>
+                    <p className="text-xs text-muted-foreground">{selectedProp ? `${incomeMultiplier}x monthly rent` : "Income requirement varies"}</p>
+                  </div>
                 </div>
                 <div className="flex items-center gap-3 rounded-xl border p-4">
                   <Home className="h-6 w-6 text-primary shrink-0" />
@@ -362,18 +445,22 @@ export default function ApplyPage() {
         {/* ── STEP 1: Select Property ── */}
         {step === 1 && (
           <Card>
-            <CardHeader><CardTitle className="text-2xl">Select Property</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-2xl">{propertyLockedByShare ? "You're Applying For" : "Select Property"}</CardTitle></CardHeader>
             <CardContent className="space-y-6">
-              <div>
-                <Label htmlFor="propertyApplyingFor" required>Which property are you applying for?</Label>
-                <select id="propertyApplyingFor" className={select} {...register("propertyApplyingFor", { required: "Please select a property" })}>
-                  <option value="">Select a property...</option>
-                  {properties.map(p => (
-                    <option key={p.id} value={p.id}>{p.name} — {p.address1}, {p.city}, {p.state}</option>
-                  ))}
-                </select>
-                <Err msg={errors.propertyApplyingFor?.message} />
-              </div>
+              {propertyLockedByShare ? (
+                <input type="hidden" {...register("propertyApplyingFor", { required: "Property required" })} />
+              ) : (
+                <div>
+                  <Label htmlFor="propertyApplyingFor" required>Which property are you applying for?</Label>
+                  <select id="propertyApplyingFor" className={select} {...register("propertyApplyingFor", { required: "Please select a property" })}>
+                    <option value="">Select a property...</option>
+                    {properties.map(p => (
+                      <option key={p.id} value={p.id}>{p.name} — {p.address1}, {p.city}, {p.state}</option>
+                    ))}
+                  </select>
+                  <Err msg={errors.propertyApplyingFor?.message} />
+                </div>
+              )}
 
               {selectedProp && (
                 <div className="rounded-xl border-2 border-primary/20 bg-primary/5 p-5 space-y-3">
@@ -393,9 +480,36 @@ export default function ApplyPage() {
                       <p className="text-xs text-muted-foreground">Total Move-in</p>
                     </div>
                   </div>
-                  <div className="border-t pt-3 mt-3 text-sm text-muted-foreground space-y-1">
-                    <p>Min. income: <strong>${(selectedProp.monthlyRent * 2.75).toLocaleString()}/mo</strong> (2.75x rent)</p>
-                    <p>No subleasing or Airbnb. Pets case-by-case.</p>
+                  <div className="border-t pt-3 mt-3 text-sm text-muted-foreground space-y-2">
+                    <p>
+                      Min. income:{" "}
+                      <strong>
+                        ${(selectedProp.monthlyRent * incomeMultiplier).toLocaleString(undefined, { maximumFractionDigits: 0 })}/mo
+                      </strong>{" "}
+                      ({incomeMultiplier}x rent)
+                    </p>
+                    {selectedProp.minCreditScore != null && (
+                      <p>Minimum credit score: <strong>{selectedProp.minCreditScore}</strong></p>
+                    )}
+                    <p>
+                      {petsPolicyLabel[selectedProp.petsPolicy ?? "case_by_case"] ?? "Pets case-by-case"}
+                      {" · "}
+                      {selectedProp.smokingAllowed ? "Smoking allowed" : "No smoking"}
+                      {" · "}
+                      {selectedProp.subleaseAllowed ? "Subleasing OK" : "No subleasing"}
+                      {" · "}
+                      {selectedProp.airbnbAllowed ? "Short-term rental OK" : "No Airbnb"}
+                    </p>
+                    {customRequirementBullets.length > 0 && (
+                      <div className="pt-2">
+                        <p className="font-medium text-foreground">Additional requirements:</p>
+                        <ul className="mt-1 list-disc pl-5 space-y-0.5">
+                          {customRequirementBullets.map((line, i) => (
+                            <li key={i}>{line}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -621,6 +735,140 @@ export default function ApplyPage() {
                 <div>
                   <Label htmlFor="lateRentExplanation">Please explain</Label>
                   <textarea id="lateRentExplanation" className={textarea} {...register("lateRentExplanation")} />
+                </div>
+              )}
+
+              {selectedProp?.acceptsVouchers && (
+                <div className="border-t pt-6 space-y-5">
+                  <div>
+                    <h3 className="text-xl font-semibold">Rental Assistance / Voucher</h3>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Voucher applicants are welcome if qualified. Final approval depends on tenant eligibility,
+                      housing authority rent approval, required paperwork, and inspection.
+                    </p>
+                  </div>
+
+                  <div>
+                    <Label required>
+                      Will you be using Section 8, PMHA, Housing Choice Voucher, or other rental assistance?
+                    </Label>
+                    <div className="mt-2 grid gap-3 sm:grid-cols-3">
+                      {[
+                        { value: "yes", label: "Yes" },
+                        { value: "no", label: "No" },
+                        { value: "not_sure", label: "Not sure yet" },
+                      ].map((opt) => (
+                        <label key={opt.value} className="cursor-pointer">
+                          <input type="radio" className="peer sr-only" value={opt.value} {...register("usingVoucher")} />
+                          <div className="peer-checked:border-primary peer-checked:bg-primary/5 rounded-xl border-2 p-4 text-center text-base font-medium transition">
+                            {opt.label}
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {usingVoucher === "yes" && (
+                    <div className="space-y-5">
+                      <div>
+                        <Label htmlFor="voucherAgency">Housing authority / agency name</Label>
+                        <input
+                          id="voucherAgency"
+                          type="text"
+                          className={input}
+                          placeholder="e.g. Portsmouth Metropolitan Housing Authority (PMHA)"
+                          {...register("voucherAgency")}
+                        />
+                      </div>
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <div>
+                          <Label htmlFor="voucherBedroomSize">Voucher bedroom size</Label>
+                          <input
+                            id="voucherBedroomSize"
+                            type="text"
+                            className={input}
+                            placeholder="e.g. 2-bedroom"
+                            {...register("voucherBedroomSize")}
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="voucherExpiration">Voucher expiration date (if known)</Label>
+                          <input
+                            id="voucherExpiration"
+                            type="date"
+                            className={input}
+                            {...register("voucherExpiration")}
+                          />
+                        </div>
+                      </div>
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <div>
+                          <Label htmlFor="voucherApprovedRent">Approved rent amount / limit ($)</Label>
+                          <input
+                            id="voucherApprovedRent"
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            className={input}
+                            {...register("voucherApprovedRent")}
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="voucherTenantPortion">Estimated tenant-paid portion ($)</Label>
+                          <input
+                            id="voucherTenantPortion"
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            className={input}
+                            {...register("voucherTenantPortion")}
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <Label>Caseworker / housing specialist (if available)</Label>
+                        <div className="mt-1 grid gap-3 sm:grid-cols-3">
+                          <input
+                            type="text"
+                            className={input}
+                            placeholder="Name"
+                            {...register("voucherCaseworkerName")}
+                          />
+                          <input
+                            type="tel"
+                            className={input}
+                            placeholder="Phone"
+                            {...register("voucherCaseworkerPhone")}
+                          />
+                          <input
+                            type="email"
+                            className={input}
+                            placeholder="Email"
+                            {...register("voucherCaseworkerEmail")}
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <Label>Do you already have the Request for Tenancy Approval (RFTA) paperwork?</Label>
+                        <div className="mt-2 grid gap-3 sm:grid-cols-3">
+                          {[
+                            { value: "yes", label: "Yes" },
+                            { value: "no", label: "No" },
+                            { value: "not_sure", label: "Not sure" },
+                          ].map((opt) => (
+                            <label key={opt.value} className="cursor-pointer">
+                              <input type="radio" className="peer sr-only" value={opt.value} {...register("voucherHasRfta")} />
+                              <div className="peer-checked:border-primary peer-checked:bg-primary/5 rounded-xl border-2 p-4 text-center text-base font-medium transition">
+                                {opt.label}
+                              </div>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </CardContent>

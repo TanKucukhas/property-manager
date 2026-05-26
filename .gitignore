@@ -37,6 +37,7 @@ yarn-error.log*
 
 # local database
 /data/
+/backups/
 
 # cloudflare build output
 .open-next/

@@ -15,11 +15,13 @@ import {
   MenuIcon,
   XIcon,
   LogOutIcon,
+  Share2Icon,
 } from "lucide-react"
 
 const navItems = [
   { label: "Dashboard", href: "/admin", icon: LayoutDashboardIcon },
   { label: "Prescreening", href: "/admin/prescreening", icon: ClipboardListIcon },
+  { label: "Shares", href: "/admin/shares", icon: Share2Icon },
   { label: "Properties", href: "/admin/properties", icon: BuildingIcon },
   { label: "Tenants", href: "/admin/tenants", icon: UsersIcon },
   { label: "Leases", href: "/admin/leases", icon: FileTextIcon },

@@ -12,7 +12,7 @@ export async function sendEmail({
   to,
   subject,
   htmlContent,
-  senderName = "Cresiq Property Manager",
+  senderName = "CresIQ Property Manager",
   senderEmail = "hello@cresiq.com",
 }: SendEmailParams) {
   let apiKey = process.env.BREVO_API_KEY;
@@ -106,28 +106,60 @@ export function prescreeningConfirmationEmail(name: string, summary?: Applicatio
         <p>If your application meets our minimum requirements, we will reach out to schedule a showing and invite you to complete the formal screening process.</p>
         ${summary ? buildSummaryBlock(summary) : ""}
         <p style="font-size: 12px; color: #999;">Please keep this email for your records.</p>
-        <p style="margin-top: 24px; color: #666;">Cresiq Property Management</p>
+        <p style="margin-top: 24px; color: #666;">CresIQ Property Management</p>
       </div>
     `,
   };
 }
 
-export function prescreeningAdminNotification(name: string, email: string, score: number, flags: string[]) {
+export interface ShareLeadInfo {
+  shareType: string;
+  leadSource: string | null;
+  recipientName: string | null;
+  sourceProfile: string | null;
+  notes: string | null;
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] || c));
+}
+
+export function prescreeningAdminNotification(name: string, email: string, score: number, flags: string[], lead?: ShareLeadInfo | null) {
   const flagsHtml = flags.length > 0
-    ? `<div style="margin-top: 12px; padding: 12px; background: #fff3cd; border-radius: 6px;"><p style="margin: 0 0 6px; font-weight: bold; font-size: 13px;">Flags:</p><ul style="margin: 0; padding-left: 18px; font-size: 13px;">${flags.map(f => `<li>${f}</li>`).join("")}</ul></div>`
+    ? `<div style="margin-top: 12px; padding: 12px; background: #fff3cd; border-radius: 6px;"><p style="margin: 0 0 6px; font-weight: bold; font-size: 13px;">Flags:</p><ul style="margin: 0; padding-left: 18px; font-size: 13px;">${flags.map(f => `<li>${escapeHtml(f)}</li>`).join("")}</ul></div>`
     : `<p style="margin-top: 12px; color: #28a745; font-size: 13px;">No flags — clean application.</p>`;
 
+  let leadHtml = "";
+  if (lead) {
+    const profileLink = lead.sourceProfile
+      ? `<a href="${escapeHtml(lead.sourceProfile)}" style="color: #2563eb;">${escapeHtml(lead.sourceProfile)}</a>`
+      : "—";
+    leadHtml = `
+      <div style="margin-top: 16px; padding: 12px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px;">
+        <p style="margin: 0 0 8px; font-weight: bold; font-size: 13px; color: #1e40af;">Shared via — Lead Details</p>
+        <table style="border-collapse: collapse; width: 100%; font-size: 13px;">
+          <tr><td style="padding: 4px 8px; color: #475569;">Type:</td><td style="padding: 4px 8px;">${escapeHtml(lead.shareType === "direct" ? "Direct (DM)" : "Public link")}</td></tr>
+          <tr><td style="padding: 4px 8px; color: #475569;">Source:</td><td style="padding: 4px 8px;">${escapeHtml(lead.leadSource || "—")}</td></tr>
+          ${lead.recipientName ? `<tr><td style="padding: 4px 8px; color: #475569;">Shared with:</td><td style="padding: 4px 8px;">${escapeHtml(lead.recipientName)}</td></tr>` : ""}
+          <tr><td style="padding: 4px 8px; color: #475569;">Profile:</td><td style="padding: 4px 8px;">${profileLink}</td></tr>
+          ${lead.notes ? `<tr><td style="padding: 4px 8px; color: #475569; vertical-align: top;">Notes:</td><td style="padding: 4px 8px; white-space: pre-wrap;">${escapeHtml(lead.notes)}</td></tr>` : ""}
+        </table>
+      </div>
+    `;
+  }
+
   return {
-    subject: `New Application: ${name} (Score: ${score}/100)`,
+    subject: `New Application: ${name} (Score: ${score}/100)${lead?.leadSource ? ` — via ${lead.leadSource}` : ""}`,
     htmlContent: `
       <div style="font-family: Roboto, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px;">
         <h2 style="color: #1a1a1a;">New Pre-Screening Application</h2>
         <table style="border-collapse: collapse; width: 100%;">
-          <tr><td style="padding: 8px; font-weight: bold;">Applicant:</td><td style="padding: 8px;">${name}</td></tr>
-          <tr><td style="padding: 8px; font-weight: bold;">Email:</td><td style="padding: 8px;">${email}</td></tr>
+          <tr><td style="padding: 8px; font-weight: bold;">Applicant:</td><td style="padding: 8px;">${escapeHtml(name)}</td></tr>
+          <tr><td style="padding: 8px; font-weight: bold;">Email:</td><td style="padding: 8px;">${escapeHtml(email)}</td></tr>
           <tr><td style="padding: 8px; font-weight: bold;">Score:</td><td style="padding: 8px;"><strong>${score}/100</strong></td></tr>
         </table>
         ${flagsHtml}
+        ${leadHtml}
         <p style="margin-top: 16px;">Log in to review the full application and update status.</p>
       </div>
     `,

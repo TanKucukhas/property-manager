@@ -8,6 +8,21 @@ export const admins = sqliteTable("admins", {
   createdAt: text("created_at").notNull().$defaultFn(() => new Date().toISOString()),
 });
 
+export const propertyManagers = sqliteTable("property_managers", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  email: text("email").notNull().unique(),
+  company: text("company"),
+  phone: text("phone"),
+  passwordHash: text("password_hash").notNull(),
+  status: text("status").notNull().default("pending"),
+  notes: text("notes"),
+  approvedAt: text("approved_at"),
+  rejectedAt: text("rejected_at"),
+  createdAt: text("created_at").notNull().$defaultFn(() => new Date().toISOString()),
+  updatedAt: text("updated_at").notNull().$defaultFn(() => new Date().toISOString()),
+});
+
 export const properties = sqliteTable("properties", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(),
@@ -20,6 +35,14 @@ export const properties = sqliteTable("properties", {
   leaseType: text("lease_type").notNull().default("fixed"),
   status: text("status").notNull().default("available"),
   leaseTermsSummary: text("lease_terms_summary"),
+  incomeMultiplier: real("income_multiplier").notNull().default(2.75),
+  minCreditScore: integer("min_credit_score"),
+  petsPolicy: text("pets_policy").notNull().default("case_by_case"),
+  smokingAllowed: integer("smoking_allowed", { mode: "boolean" }).notNull().default(false),
+  subleaseAllowed: integer("sublease_allowed", { mode: "boolean" }).notNull().default(false),
+  airbnbAllowed: integer("airbnb_allowed", { mode: "boolean" }).notNull().default(false),
+  acceptsVouchers: integer("accepts_vouchers", { mode: "boolean" }).notNull().default(false),
+  customRequirements: text("custom_requirements"),
   aiAnalysis: text("ai_analysis"),
   aiAnalysisDate: text("ai_analysis_date"),
   createdAt: text("created_at").notNull().$defaultFn(() => new Date().toISOString()),
@@ -80,6 +103,18 @@ export const prescreenings = sqliteTable("prescreenings", {
   screeningConsent: integer("screening_consent", { mode: "boolean" }).notNull(),
   moveReason: text("move_reason"),
   additionalNotes: text("additional_notes"),
+  usingVoucher: text("using_voucher"),
+  voucherAgency: text("voucher_agency"),
+  voucherBedroomSize: text("voucher_bedroom_size"),
+  voucherExpiration: text("voucher_expiration"),
+  voucherApprovedRent: real("voucher_approved_rent"),
+  voucherTenantPortion: real("voucher_tenant_portion"),
+  voucherCaseworkerName: text("voucher_caseworker_name"),
+  voucherCaseworkerPhone: text("voucher_caseworker_phone"),
+  voucherCaseworkerEmail: text("voucher_caseworker_email"),
+  voucherHasRfta: text("voucher_has_rfta"),
+  aiAnalysis: text("ai_analysis"),
+  aiAnalysisDate: text("ai_analysis_date"),
   score: integer("score"),
   adminRating: integer("admin_rating"),
   status: text("status").notNull().default("new"),
@@ -87,8 +122,35 @@ export const prescreenings = sqliteTable("prescreenings", {
   showingDate: text("showing_date"),
   showingTime: text("showing_time"),
   adminNotes: text("admin_notes"),
+  shareId: integer("share_id"),
   createdAt: text("created_at").notNull().$defaultFn(() => new Date().toISOString()),
   updatedAt: text("updated_at").notNull().$defaultFn(() => new Date().toISOString()),
+});
+
+export const applicationShares = sqliteTable("application_shares", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  shareToken: text("share_token").notNull().unique(),
+  shareType: text("share_type").notNull().default("direct"),
+  propertyId: integer("property_id").references(() => properties.id),
+  recipientName: text("recipient_name"),
+  leadSource: text("lead_source"),
+  sourceProfile: text("source_profile"),
+  notes: text("notes"),
+  archivedAt: text("archived_at"),
+  createdAt: text("created_at").notNull().$defaultFn(() => new Date().toISOString()),
+  updatedAt: text("updated_at").notNull().$defaultFn(() => new Date().toISOString()),
+});
+
+export const shareVisits = sqliteTable("share_visits", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  shareId: integer("share_id").notNull().references(() => applicationShares.id),
+  visitorId: text("visitor_id").notNull(),
+  furthestStep: integer("furthest_step").notNull().default(0),
+  totalSteps: integer("total_steps").notNull().default(0),
+  firstOpenedAt: text("first_opened_at").notNull(),
+  lastSeenAt: text("last_seen_at").notNull(),
+  completedAt: text("completed_at"),
+  submittedPrescreeningId: integer("submitted_prescreening_id"),
 });
 
 export const tenants = sqliteTable("tenants", {

@@ -4,12 +4,13 @@ import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog"
-import { PlusIcon, PencilIcon, TrashIcon, BuildingIcon, BrainCircuitIcon, CopyIcon, CheckIcon, ChevronDownIcon, ChevronUpIcon } from "lucide-react"
+import { PlusIcon, PencilIcon, TrashIcon, BuildingIcon, BrainCircuitIcon, CopyIcon, CheckIcon, ChevronDownIcon, ChevronUpIcon, Share2Icon } from "lucide-react"
 
 interface Property {
   id: string
@@ -22,6 +23,14 @@ interface Property {
   securityDeposit: number
   leaseType: string
   status: string
+  incomeMultiplier: number
+  minCreditScore: number | null
+  petsPolicy: string
+  smokingAllowed: boolean
+  subleaseAllowed: boolean
+  airbnbAllowed: boolean
+  acceptsVouchers: boolean
+  customRequirements: string | null
   aiAnalysis: string | null
   aiAnalysisDate: string | null
 }
@@ -29,6 +38,9 @@ interface Property {
 const emptyProperty: Omit<Property, "id" | "aiAnalysis" | "aiAnalysisDate"> = {
   name: "", address1: "", city: "", state: "", zip: "",
   monthlyRent: 0, securityDeposit: 0, leaseType: "fixed", status: "available",
+  incomeMultiplier: 2.75, minCreditScore: null, petsPolicy: "case_by_case",
+  smokingAllowed: false, subleaseAllowed: false, airbnbAllowed: false,
+  acceptsVouchers: false, customRequirements: null,
 }
 
 const statusColors: Record<string, string> = {
@@ -250,6 +262,66 @@ export default function PropertiesPage() {
   const [aiCopied, setAiCopied] = useState(false)
   const [aiParsed, setAiParsed] = useState<Record<string, unknown> | null>(null)
 
+  // Share state
+  const [shareDialogOpen, setShareDialogOpen] = useState(false)
+  const [shareProperty, setShareProperty] = useState<Property | null>(null)
+  const [shareType, setShareType] = useState<"direct" | "public">("direct")
+  const [shareLeadSource, setShareLeadSource] = useState("Facebook DM")
+  const [shareRecipientName, setShareRecipientName] = useState("")
+  const [shareSourceProfile, setShareSourceProfile] = useState("")
+  const [shareNotes, setShareNotes] = useState("")
+  const [shareSaving, setShareSaving] = useState(false)
+  const [shareUrl, setShareUrl] = useState<string | null>(null)
+  const [shareCopied, setShareCopied] = useState(false)
+
+  const LEAD_SOURCES_DIRECT = ["Facebook DM", "Instagram DM", "Text/SMS", "WhatsApp", "Email", "Referral", "Other"]
+  const LEAD_SOURCES_PUBLIC = ["Facebook Marketplace", "Facebook Group", "Zillow", "Craigslist", "Instagram Post", "Roomies", "Other"]
+
+  function openShareDialog(p: Property | null) {
+    setShareProperty(p)
+    setShareType("direct")
+    setShareLeadSource("Facebook DM")
+    setShareRecipientName("")
+    setShareSourceProfile("")
+    setShareNotes("")
+    setShareUrl(null)
+    setShareCopied(false)
+    setShareDialogOpen(true)
+  }
+
+  async function handleCreateShare() {
+    setShareSaving(true)
+    try {
+      const res = await fetch("/api/admin/shares", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          shareType,
+          propertyId: shareProperty ? parseInt(shareProperty.id) : null,
+          leadSource: shareLeadSource,
+          recipientName: shareType === "direct" ? shareRecipientName : null,
+          sourceProfile: shareSourceProfile,
+          notes: shareNotes,
+        }),
+      })
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "Failed to create share")
+      const data = await res.json()
+      const origin = typeof window !== "undefined" ? window.location.origin : ""
+      setShareUrl(`${origin}/apply?ref=${data.token}`)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to create share")
+    } finally {
+      setShareSaving(false)
+    }
+  }
+
+  async function copyShareUrl() {
+    if (!shareUrl) return
+    await navigator.clipboard.writeText(shareUrl)
+    setShareCopied(true)
+    setTimeout(() => setShareCopied(false), 2000)
+  }
+
   async function loadProperties() {
     try {
       const res = await fetch("/api/properties")
@@ -277,6 +349,14 @@ export default function PropertiesPage() {
       name: p.name, address1: p.address1, city: p.city, state: p.state, zip: p.zip,
       monthlyRent: p.monthlyRent, securityDeposit: p.securityDeposit,
       leaseType: p.leaseType, status: p.status,
+      incomeMultiplier: p.incomeMultiplier ?? 2.75,
+      minCreditScore: p.minCreditScore ?? null,
+      petsPolicy: p.petsPolicy ?? "case_by_case",
+      smokingAllowed: !!p.smokingAllowed,
+      subleaseAllowed: !!p.subleaseAllowed,
+      airbnbAllowed: !!p.airbnbAllowed,
+      acceptsVouchers: !!p.acceptsVouchers,
+      customRequirements: p.customRequirements ?? null,
     })
     setDialogOpen(true)
   }
@@ -312,7 +392,7 @@ export default function PropertiesPage() {
     }
   }
 
-  function updateForm(key: string, value: string | number) {
+  function updateForm(key: string, value: string | number | boolean | null) {
     setForm((f) => ({ ...f, [key]: value }))
   }
 
@@ -443,6 +523,9 @@ export default function PropertiesPage() {
                   )}
 
                   <div className="mt-2 flex flex-wrap gap-2">
+                    <Button variant="outline" size="sm" onClick={() => openShareDialog(p)} className="gap-1">
+                      <Share2Icon className="size-3" /> Share
+                    </Button>
                     <Button variant="outline" size="sm" onClick={() => openAiDialog(p)} className="gap-1">
                       <BrainCircuitIcon className="size-3" />
                       {p.aiAnalysis ? "View Report" : "AI Intel"}
@@ -524,6 +607,114 @@ export default function PropertiesPage() {
                   <option value="maintenance">Maintenance</option>
                   <option value="archived">Archived</option>
                 </select>
+              </div>
+            </div>
+
+            <div className="border-t pt-4">
+              <h3 className="font-semibold mb-1">Qualification requirements</h3>
+              <p className="text-xs text-muted-foreground mb-3">
+                These are shown to applicants on the apply page and used to score new applications.
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-2">
+                  <Label>Income multiplier</Label>
+                  <Input
+                    type="number"
+                    step="0.05"
+                    min="0"
+                    value={form.incomeMultiplier}
+                    onChange={(e) => updateForm("incomeMultiplier", Number(e.target.value))}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Min monthly income = rent × this. Default 2.75.
+                  </p>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label>Minimum credit score</Label>
+                  <Input
+                    type="number"
+                    min="300"
+                    max="850"
+                    placeholder="No minimum"
+                    value={form.minCreditScore ?? ""}
+                    onChange={(e) =>
+                      updateForm("minCreditScore", e.target.value === "" ? null : Number(e.target.value))
+                    }
+                  />
+                  <p className="text-xs text-muted-foreground">Leave blank for no minimum.</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 mt-3">
+                <div className="flex flex-col gap-2">
+                  <Label>Pets</Label>
+                  <select
+                    className="h-9 w-full rounded-lg border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                    value={form.petsPolicy}
+                    onChange={(e) => updateForm("petsPolicy", e.target.value)}
+                  >
+                    <option value="allowed">Allowed</option>
+                    <option value="case_by_case">Case-by-case</option>
+                    <option value="not_allowed">Not allowed</option>
+                  </select>
+                </div>
+                <div className="flex flex-col justify-end gap-2 pb-1">
+                  <label className="flex items-center gap-2 cursor-pointer text-sm">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-input accent-primary"
+                      checked={!!form.smokingAllowed}
+                      onChange={(e) => updateForm("smokingAllowed", e.target.checked)}
+                    />
+                    Smoking allowed
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer text-sm">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-input accent-primary"
+                      checked={!!form.subleaseAllowed}
+                      onChange={(e) => updateForm("subleaseAllowed", e.target.checked)}
+                    />
+                    Subleasing allowed
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer text-sm">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-input accent-primary"
+                      checked={!!form.airbnbAllowed}
+                      onChange={(e) => updateForm("airbnbAllowed", e.target.checked)}
+                    />
+                    Short-term rental / Airbnb allowed
+                  </label>
+                </div>
+              </div>
+
+              <label className="flex items-start gap-2 cursor-pointer text-sm mt-4 rounded-lg border p-3">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4 rounded border-input accent-primary"
+                  checked={!!form.acceptsVouchers}
+                  onChange={(e) => updateForm("acceptsVouchers", e.target.checked)}
+                />
+                <span>
+                  <span className="font-medium">Accept Housing Choice Voucher / Section 8 / PMHA</span>
+                  <span className="block text-xs text-muted-foreground">
+                    When on, applicants see a voucher information section on the apply page.
+                  </span>
+                </span>
+              </label>
+
+              <div className="flex flex-col gap-2 mt-3">
+                <Label>Custom requirements</Label>
+                <Textarea
+                  value={form.customRequirements ?? ""}
+                  onChange={(e) => updateForm("customRequirements", e.target.value || null)}
+                  placeholder={"One per line, e.g.\nNo more than 2 cats\nRenter's insurance required\nGarage parking only"}
+                  rows={4}
+                />
+                <p className="text-xs text-muted-foreground">
+                  One requirement per line. Shown as a bullet list on the apply page.
+                </p>
               </div>
             </div>
           </div>
@@ -631,6 +822,112 @@ export default function PropertiesPage() {
                   Re-run Analysis
                 </Button>
               </>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={shareDialogOpen} onOpenChange={setShareDialogOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Share2Icon className="size-4" /> Share Application{shareProperty ? ` — ${shareProperty.name}` : ""}
+            </DialogTitle>
+          </DialogHeader>
+
+          {!shareUrl ? (
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-2">
+                <Label>Share Type</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => { setShareType("direct"); setShareLeadSource(LEAD_SOURCES_DIRECT[0]) }}
+                    className={`rounded-lg border-2 p-3 text-sm transition ${shareType === "direct" ? "border-primary bg-primary/5" : "border-input hover:bg-muted"}`}
+                  >
+                    <div className="font-medium">Direct (DM)</div>
+                    <div className="text-xs text-muted-foreground mt-1">Tied to one specific person</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setShareType("public"); setShareLeadSource(LEAD_SOURCES_PUBLIC[0]) }}
+                    className={`rounded-lg border-2 p-3 text-sm transition ${shareType === "public" ? "border-primary bg-primary/5" : "border-input hover:bg-muted"}`}
+                  >
+                    <div className="font-medium">Public Post</div>
+                    <div className="text-xs text-muted-foreground mt-1">Posted on Marketplace, Zillow, etc.</div>
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <Label>Lead Source</Label>
+                <select
+                  className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                  value={shareLeadSource}
+                  onChange={(e) => setShareLeadSource(e.target.value)}
+                >
+                  {(shareType === "direct" ? LEAD_SOURCES_DIRECT : LEAD_SOURCES_PUBLIC).map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </div>
+
+              {shareType === "direct" && (
+                <div className="flex flex-col gap-2">
+                  <Label>Recipient Name <span className="text-muted-foreground">(optional)</span></Label>
+                  <Input
+                    value={shareRecipientName}
+                    onChange={(e) => setShareRecipientName(e.target.value)}
+                    placeholder="e.g. John Smith"
+                  />
+                </div>
+              )}
+
+              <div className="flex flex-col gap-2">
+                <Label>{shareType === "direct" ? "Profile URL or handle" : "Listing URL"} <span className="text-muted-foreground">(optional)</span></Label>
+                <Input
+                  value={shareSourceProfile}
+                  onChange={(e) => setShareSourceProfile(e.target.value)}
+                  placeholder={shareType === "direct" ? "https://facebook.com/john.smith" : "https://facebook.com/marketplace/item/..."}
+                />
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <Label>Notes <span className="text-muted-foreground">(optional)</span></Label>
+                <textarea
+                  className="min-h-[60px] rounded-md border border-input bg-background p-2 text-sm"
+                  value={shareNotes}
+                  onChange={(e) => setShareNotes(e.target.value)}
+                  placeholder="Anything you want to remember about this lead"
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              <p className="text-sm text-muted-foreground">Unique application link created. Copy and share it:</p>
+              <div className="flex gap-2">
+                <Input value={shareUrl} readOnly onFocus={(e) => e.currentTarget.select()} className="font-mono text-xs" />
+                <Button onClick={copyShareUrl} variant="outline" className="gap-1">
+                  {shareCopied ? <CheckIcon className="size-3" /> : <CopyIcon className="size-3" />}
+                  {shareCopied ? "Copied" : "Copy"}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Submissions through this link will be tagged with the lead info you entered.
+              </p>
+            </div>
+          )}
+
+          <DialogFooter>
+            {!shareUrl ? (
+              <>
+                <Button variant="outline" onClick={() => setShareDialogOpen(false)} disabled={shareSaving}>Cancel</Button>
+                <Button onClick={handleCreateShare} disabled={shareSaving}>
+                  {shareSaving ? "Creating..." : "Create Link"}
+                </Button>
+              </>
+            ) : (
+              <Button onClick={() => setShareDialogOpen(false)}>Done</Button>
             )}
           </DialogFooter>
         </DialogContent>

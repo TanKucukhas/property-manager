@@ -15,6 +15,14 @@ export async function GET() {
       zip: properties.zip,
       monthlyRent: properties.monthlyRent,
       securityDeposit: properties.securityDeposit,
+      incomeMultiplier: properties.incomeMultiplier,
+      minCreditScore: properties.minCreditScore,
+      petsPolicy: properties.petsPolicy,
+      smokingAllowed: properties.smokingAllowed,
+      subleaseAllowed: properties.subleaseAllowed,
+      airbnbAllowed: properties.airbnbAllowed,
+      acceptsVouchers: properties.acceptsVouchers,
+      customRequirements: properties.customRequirements,
     })
     .from(properties)
     .where(eq(properties.status, "available"))
