@@ -10,9 +10,9 @@
     "seed": "npx tsx src/db/seed.ts",
     "cf:build": "npx opennextjs-cloudflare build",
     "cf:preview": "npm run cf:build && npx wrangler dev",
-    "cf:deploy": "npm run cf:build && npx opennextjs-cloudflare deploy",
+    "cf:deploy": "npm run cf:build && npx wrangler d1 migrations apply property-manager-db --remote && npx opennextjs-cloudflare deploy",
     "cf:d1:create": "npx wrangler d1 create property-manager-db",
-    "cf:d1:migrate": "npx wrangler d1 execute property-manager-db --remote --file=migrations/0001_init.sql && npx wrangler d1 execute property-manager-db --remote --file=migrations/0002_seed_admin.sql"
+    "cf:d1:migrate": "for f in migrations/*.sql; do echo \"Applying $f...\"; npx wrangler d1 execute property-manager-db --remote --file=\"$f\" || echo \"  (skipped or already applied)\"; done"
   },
   "dependencies": {
     "@base-ui/react": "^1.3.0",

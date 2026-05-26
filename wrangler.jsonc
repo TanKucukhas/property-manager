@@ -16,7 +16,8 @@
     {
       "binding": "DB",
       "database_name": "property-manager-db",
-      "database_id": "0d011bf5-d02e-4bbf-8ca3-92beb4740206"
+      "database_id": "0d011bf5-d02e-4bbf-8ca3-92beb4740206",
+      "migrations_dir": "migrations"
     }
   ]
 }
