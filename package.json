@@ -12,7 +12,8 @@
     "cf:preview": "npm run cf:build && npx wrangler dev",
     "cf:deploy": "npm run cf:build && npx wrangler d1 migrations apply property-manager-db --remote && npx opennextjs-cloudflare deploy",
     "cf:d1:create": "npx wrangler d1 create property-manager-db",
-    "cf:d1:migrate": "for f in migrations/*.sql; do echo \"Applying $f...\"; npx wrangler d1 execute property-manager-db --remote --file=\"$f\" || echo \"  (skipped or already applied)\"; done"
+    "cf:d1:backup": "npx wrangler d1 export property-manager-db --remote --output=backups/d1-$(date +%Y%m%d-%H%M%S).sql",
+    "cf:d1:migrate": "for f in migrations/*.sql; do if grep -qiE 'DROP |DELETE |TRUNCATE |UPDATE ' \"$f\"; then echo \"BLOCKED $f — contains destructive SQL\"; exit 1; fi; echo \"Applying $f...\"; npx wrangler d1 execute property-manager-db --remote --file=\"$f\" || echo \"  (skipped or already applied)\"; done"
   },
   "dependencies": {
     "@base-ui/react": "^1.3.0",
