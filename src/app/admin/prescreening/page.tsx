@@ -14,6 +14,10 @@ import {
 } from "@/components/ui/dialog"
 import { ArrowDown, ArrowUp, ArrowUpDown, BrainCircuit, Copy as CopyIcon, Check as CheckIcon, History, Sparkles } from "lucide-react"
 import { generatePrescreeningPrompt, type PrescreeningAIAnalysis } from "@/lib/ai-prescreening-prompt"
+import { coerceToStringOrNull, normalizeAiAnalysis } from "@/lib/ai-analysis"
+import {
+  formatCurrency, formatDate, getPetWarning, listingName, looksYearly, statusColors, statusLabels, statusOptions,
+} from "@/lib/prescreening-ui"
 
 interface PrescreeningRecord {
   id: string
@@ -69,11 +73,6 @@ const DEFAULT_SORT_DIR: Record<SortKey, SortDir> = {
   credit: "desc", income: "desc", score: "desc", listing: "desc", date: "desc",
 }
 
-function listingName(l: { label: string | null; openedAt: string } | null | undefined): string {
-  if (!l) return "No listing"
-  return l.label || new Date(l.openedAt).toLocaleDateString("en-US", { month: "short", year: "numeric" })
-}
-
 function normalizeEmail(v: unknown): string {
   return typeof v === "string" ? v.trim().toLowerCase() : ""
 }
@@ -82,34 +81,6 @@ function normalizePhone(v: unknown): string {
   if (typeof v !== "string") return ""
   const digits = v.replace(/\D/g, "")
   return digits.length >= 10 ? digits.slice(-10) : ""
-}
-
-const statusColors: Record<string, { variant: "default" | "secondary" | "destructive" | "outline"; className: string }> = {
-  new: { variant: "secondary", className: "bg-blue-100 text-blue-800" },
-  review: { variant: "secondary", className: "bg-yellow-100 text-yellow-800" },
-  "with-concerns": { variant: "secondary", className: "bg-orange-100 text-orange-800" },
-  "in-progress": { variant: "secondary", className: "bg-amber-100 text-amber-800" },
-  "pre-approved": { variant: "secondary", className: "bg-green-100 text-green-800" },
-  rejected: { variant: "secondary", className: "bg-red-100 text-red-800" },
-  "scheduled-for-showing": { variant: "secondary", className: "bg-indigo-100 text-indigo-800" },
-  "showing-completed": { variant: "secondary", className: "bg-purple-100 text-purple-800" },
-  "did-not-show-up": { variant: "secondary", className: "bg-rose-100 text-rose-800" },
-  "tenant-cancelled": { variant: "secondary", className: "bg-gray-100 text-gray-800" },
-  "tenant-accepted": { variant: "secondary", className: "bg-emerald-100 text-emerald-800" },
-  "credit-check-sent": { variant: "secondary", className: "bg-orange-100 text-orange-800" },
-  approved: { variant: "secondary", className: "bg-green-200 text-green-900" },
-}
-
-function formatDate(d: string | undefined) {
-  if (!d) return "-"
-  return new Date(d).toLocaleDateString("en-US", {
-    month: "short", day: "numeric", year: "numeric",
-  })
-}
-
-/** Same heuristic as the apply form: ≥ $15k/month is most likely a yearly salary. */
-function looksYearly(monthly: number | undefined | null) {
-  return monthly != null && monthly >= 15000
 }
 
 type AiJob = {
@@ -127,88 +98,6 @@ type AiJob = {
 }
 type AiRunnerStatus = { online: boolean; lastSeenAt: string | null; providers: string[] }
 const AI_PROVIDER_LABEL: Record<AiJob["provider"], string> = { claude: "Claude", openai: "OpenAI" }
-
-function formatCurrency(value: number | undefined) {
-  if (value == null) return "-"
-  return new Intl.NumberFormat("en-US", {
-    style: "currency", currency: "USD", minimumFractionDigits: 0,
-  }).format(value)
-}
-
-const RESTRICTED_BREED_KEYWORDS = [
-  "pit bull", "pitbull", "pit-bull",
-  "rottweiler",
-  "doberman",
-  "german shepherd",
-  "mastiff",
-  "cane corso",
-  "akita",
-  "chow chow", "chow-chow",
-  "wolf",
-  "presa canario",
-  "staffordshire", "staffy",
-  "bull terrier",
-  "great dane",
-  "saint bernard", "st bernard", "st. bernard",
-  "husky",
-  "malamute",
-  "boxer",
-  "alaskan",
-]
-
-function getPetWarning(petsJson: unknown): string | null {
-  if (!petsJson || typeof petsJson !== "string") return null
-  try {
-    const parsed = JSON.parse(petsJson) as { pets?: Array<{ type?: string; breed?: string; weight?: string }> }
-    const pets = parsed.pets || []
-    for (const pet of pets) {
-      const breed = (pet.breed || "").toLowerCase().trim()
-      const weight = parseFloat(pet.weight || "")
-      const isDog = (pet.type || "").toLowerCase() === "dog"
-      if (isDog && Number.isFinite(weight) && weight > 35) {
-        return `Large dog (${weight}lbs${breed ? `, ${pet.breed}` : ""})`
-      }
-      if (breed && RESTRICTED_BREED_KEYWORDS.some((kw) => breed.includes(kw))) {
-        return `Restricted breed: ${pet.breed}`
-      }
-    }
-  } catch {
-    return null
-  }
-  return null
-}
-
-const statusOptions = [
-  "new",
-  "review",
-  "with-concerns",
-  "in-progress",
-  "pre-approved",
-  "scheduled-for-showing",
-  "showing-completed",
-  "did-not-show-up",
-  "tenant-cancelled",
-  "tenant-accepted",
-  "credit-check-sent",
-  "approved",
-  "rejected",
-]
-
-const statusLabels: Record<string, string> = {
-  new: "New",
-  review: "Reviewed",
-  "with-concerns": "With Concerns",
-  "in-progress": "In Progress",
-  "pre-approved": "Pre-Approved",
-  "scheduled-for-showing": "Scheduled for Showing",
-  "showing-completed": "Showing Completed",
-  "did-not-show-up": "Did Not Show Up",
-  "tenant-cancelled": "Tenant Cancelled",
-  "tenant-accepted": "Tenant Accepted",
-  "credit-check-sent": "Credit Check Sent",
-  approved: "Approved",
-  rejected: "Rejected",
-}
 
 const hiddenFields = new Set(["id", "status", "notes", "createdAt", "updatedAt", "date", "_id", "rejectReason", "adminRating", "adminNotes", "score", "propertyId", "showingDate", "showingTime", "aiAnalysis", "aiAnalysisDate", "shareId"])
 
@@ -339,33 +228,6 @@ function formatPetsJson(raw: string): string | null {
   } catch {
     return String(raw)
   }
-}
-
-function stringOrEmpty(v: unknown): string {
-  if (v === null || v === undefined) return ""
-  if (typeof v === "string") return v
-  if (typeof v === "number" || typeof v === "boolean") return String(v)
-  try { return JSON.stringify(v) } catch { return "" }
-}
-
-function coerceToStringOrNull(v: unknown): string | null {
-  if (v === null || v === undefined || v === "") return null
-  if (typeof v === "string") return v
-  if (typeof v === "number" || typeof v === "boolean") return String(v)
-  if (typeof v === "object") {
-    const obj = v as Record<string, unknown>
-    if (typeof obj.comment === "string" && obj.comment) return obj.comment
-    try { return JSON.stringify(v) } catch { return null }
-  }
-  return String(v)
-}
-
-function normalizeAnalysisBlock<T extends Record<string, unknown>>(v: unknown, defaults: T): T & { comment: string } {
-  if (!v || typeof v !== "object") return { ...defaults, comment: "" } as T & { comment: string }
-  const obj = v as Record<string, unknown>
-  const out: Record<string, unknown> = { ...defaults, ...obj }
-  out.comment = stringOrEmpty(obj.comment)
-  return out as T & { comment: string }
 }
 
 function formatFieldValue(key: string, value: unknown): string | null {
@@ -551,7 +413,15 @@ export default function PrescreeningPage() {
       const [res, listingsRes] = await Promise.all([fetch("/api/prescreening"), fetch("/api/listings")])
       if (!res.ok) throw new Error("Failed to load")
       const data = await res.json()
-      setRecords(Array.isArray(data) ? data : data.data || [])
+      const list: PrescreeningRecord[] = Array.isArray(data) ? data : data.data || []
+      setRecords(list)
+      // Deep link from the Decide screen: /admin/prescreening?open=<id>
+      const openId = new URLSearchParams(window.location.search).get("open")
+      if (openId) {
+        const target = list.find((r) => String(r.id) === openId)
+        if (target) openDetail(target)
+        window.history.replaceState(null, "", window.location.pathname)
+      }
       if (listingsRes.ok) {
         const listingData = await listingsRes.json()
         setListings(Array.isArray(listingData) ? listingData : [])
@@ -679,35 +549,7 @@ export default function PrescreeningPage() {
   }
 
   function tryParseAi(raw: string): PrescreeningAIAnalysis | null {
-    const trimmed = raw.trim()
-    if (!trimmed) return null
-    // Extract the first {...} block, tolerating ``` fences or prose around it.
-    const firstBrace = trimmed.indexOf("{")
-    const lastBrace = trimmed.lastIndexOf("}")
-    if (firstBrace < 0 || lastBrace <= firstBrace) return null
-    const cleaned = trimmed.slice(firstBrace, lastBrace + 1)
-    try {
-      const parsed = JSON.parse(cleaned)
-      if (typeof parsed !== "object" || parsed === null) return null
-      return {
-        summary: stringOrEmpty(parsed.summary),
-        adminRating: Math.min(Math.max(Number(parsed.adminRating) || 0, 0), 10),
-        recommendedStatus: (function () {
-          const allowed = ["review", "with-concerns", "in-progress", "pre-approved", "rejected"] as const
-          const s = String(parsed.recommendedStatus || "review").trim()
-          return (allowed as readonly string[]).includes(s) ? (s as PrescreeningAIAnalysis["recommendedStatus"]) : "review"
-        })(),
-        rejectReason: typeof parsed.rejectReason === "string" ? parsed.rejectReason : null,
-        adminNotes: stringOrEmpty(parsed.adminNotes),
-        redFlags: Array.isArray(parsed.redFlags) ? parsed.redFlags.map(stringOrEmpty).filter(Boolean) : [],
-        greenFlags: Array.isArray(parsed.greenFlags) ? parsed.greenFlags.map(stringOrEmpty).filter(Boolean) : [],
-        incomeAnalysis: normalizeAnalysisBlock(parsed.incomeAnalysis, { threshold: null, actual: null, meetsRequirement: null }),
-        creditAnalysis: normalizeAnalysisBlock(parsed.creditAnalysis, { range: null, meetsMinimum: null }),
-        voucherAnalysis: coerceToStringOrNull(parsed.voucherAnalysis),
-      }
-    } catch {
-      return null
-    }
+    return normalizeAiAnalysis(raw)
   }
 
   function handleAiPasteChange(value: string) {
@@ -984,9 +826,8 @@ export default function PrescreeningPage() {
     if (job.status === "running") return <Badge variant="secondary" className="gap-1 animate-pulse" title={`${label} running`}><Sparkles className="size-3" />AI running</Badge>
     if (job.status === "error") return <Badge variant="destructive" className="gap-1" title={job.error ?? ""}><Sparkles className="size-3" />AI failed</Badge>
     // Done: only flag it while it is newer than what was saved to the application.
-    const saved = typeof r.aiAnalysisDate === "string" ? r.aiAnalysisDate : ""
-    if (job.completedAt && job.completedAt > saved) {
-      return <Badge className="gap-1 bg-violet-600 text-white hover:bg-violet-600" title={`${label} result waiting for review`}><Sparkles className="size-3" />AI ready</Badge>
+    if (r.aiAnalysisDate) {
+      return <Badge variant="outline" className="gap-1 border-violet-300 text-violet-700" title={`AI rating applied (${label}) — final decision is yours`}><Sparkles className="size-3" />AI rated</Badge>
     }
     return null
   }

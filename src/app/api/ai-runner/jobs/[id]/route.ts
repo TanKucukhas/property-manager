@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { aiJobs } from "@/db/schema";
 import { extractJsonObject, isRunnerAuthorized } from "@/lib/ai-runner";
+import { applyAiResults } from "@/lib/ai-apply";
 
 /** Runner reports a result: { status: "done", result, model } or { status: "error", error }. */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -33,8 +34,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     .update(aiJobs)
     .set(updates)
     .where(and(eq(aiJobs.id, jobId), eq(aiJobs.status, "running")))
-    .returning({ id: aiJobs.id, status: aiJobs.status })
+    .returning({ id: aiJobs.id, status: aiJobs.status, prescreeningId: aiJobs.prescreeningId })
     .get();
   if (!row) return NextResponse.json({ error: "Job is not running (already finished or reclaimed)" }, { status: 409 });
+  if (row.status === "done") {
+    // Auto-fill rating, analysis and (AI-owned) notes. Never status/reject reason.
+    try {
+      await applyAiResults(db, row.prescreeningId);
+    } catch (e) {
+      console.error("applyAiResults failed", e);
+    }
+  }
   return NextResponse.json({ success: true, status: row.status });
 }

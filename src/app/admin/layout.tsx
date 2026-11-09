@@ -16,11 +16,13 @@ import {
   XIcon,
   LogOutIcon,
   Share2Icon,
+  GavelIcon,
 } from "lucide-react"
 
 const navItems = [
   { label: "Dashboard", href: "/admin", icon: LayoutDashboardIcon },
   { label: "Prescreening", href: "/admin/prescreening", icon: ClipboardListIcon },
+  { label: "Decide", href: "/admin/prescreening/decide", icon: GavelIcon },
   { label: "Shares", href: "/admin/shares", icon: Share2Icon },
   { label: "Properties", href: "/admin/properties", icon: BuildingIcon },
   { label: "Tenants", href: "/admin/tenants", icon: UsersIcon },
@@ -42,7 +44,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   function isActive(href: string) {
     if (href === "/admin") return pathname === "/admin"
-    return pathname.startsWith(href)
+    if (!pathname.startsWith(href)) return false
+    // A more specific nav item (e.g. /admin/prescreening/decide) wins over its parent.
+    return !navItems.some((n) => n.href !== href && n.href.startsWith(href) && pathname.startsWith(n.href))
   }
 
   const sidebarContent = (
