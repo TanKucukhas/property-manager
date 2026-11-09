@@ -12,7 +12,7 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog"
-import { BrainCircuit, Copy as CopyIcon, Check as CheckIcon, Sparkles } from "lucide-react"
+import { ArrowDown, ArrowUp, ArrowUpDown, BrainCircuit, Copy as CopyIcon, Check as CheckIcon, History, Sparkles } from "lucide-react"
 import { generatePrescreeningPrompt, type PrescreeningAIAnalysis } from "@/lib/ai-prescreening-prompt"
 
 interface PrescreeningRecord {
@@ -32,7 +32,56 @@ interface PrescreeningRecord {
   rejectReason?: string
   showingDate?: string
   showingTime?: string
+  phone?: string
+  listingId?: number | null
+  listing?: ListingRef | null
+  propertyName?: string | null
   [key: string]: unknown
+}
+
+interface ListingRef {
+  id: number
+  label: string | null
+  openedAt: string
+  closedAt: string | null
+  placedPrescreeningId: number | null
+}
+
+interface ListingSummary extends ListingRef {
+  propertyId: number
+  propertyName: string | null
+  applicationCount: number
+}
+
+// "current" = open listing rounds plus applications not tied to any round.
+type ListingFilter = "current" | "all" | "none" | `${number}`
+
+type SortKey = "name" | "email" | "credit" | "income" | "score" | "status" | "listing" | "date"
+type SortDir = "asc" | "desc"
+
+const CREDIT_RANK: Record<string, number> = {
+  "750+": 7, "700-749": 6, "650-699": 5, "600-649": 4, "550-599": 3, "500-549": 2, "below-500": 1, unknown: 0,
+}
+
+// Text columns start A→Z; numbers and dates start highest/newest first.
+const DEFAULT_SORT_DIR: Record<SortKey, SortDir> = {
+  name: "asc", email: "asc", status: "asc",
+  credit: "desc", income: "desc", score: "desc", listing: "desc", date: "desc",
+}
+
+function listingName(l: { label: string | null; openedAt: string } | null | undefined): string {
+  if (!l) return "No listing"
+  return l.label || new Date(l.openedAt).toLocaleDateString("en-US", { month: "short", year: "numeric" })
+}
+
+function normalizeEmail(v: unknown): string {
+  return typeof v === "string" ? v.trim().toLowerCase() : ""
+}
+
+function normalizePhone(v: unknown): string {
+  if (typeof v !== "string") return ""
+  const digits = v.replace(/\D/g, "")
+  return digits.length >= 10 ? digits.slice(-10) : ""
 }
 
 const statusColors: Record<string, { variant: "default" | "secondary" | "destructive" | "outline"; className: string }> = {
@@ -344,6 +393,11 @@ export default function PrescreeningPage() {
   const [filterMinScore, setFilterMinScore] = useState("")
   const [filterMinIncome, setFilterMinIncome] = useState("")
   const [filterCredit, setFilterCredit] = useState("all")
+  const [listings, setListings] = useState<ListingSummary[]>([])
+  const [filterListing, setFilterListing] = useState<ListingFilter>("current")
+  const [sortKey, setSortKey] = useState<SortKey>("date")
+  const [sortDir, setSortDir] = useState<SortDir>("desc")
+  const [editListingId, setEditListingId] = useState<string>("")
 
   const [aiDialogOpen, setAiDialogOpen] = useState(false)
   const [aiStep, setAiStep] = useState<"input" | "review">("input")
@@ -362,6 +416,14 @@ export default function PrescreeningPage() {
         const parsed = JSON.parse(saved)
         if (Array.isArray(parsed)) setFilterStatuses(parsed.filter((s) => typeof s === "string"))
       }
+      const savedListing = localStorage.getItem("admin-prescreening-listing-filter")
+      if (savedListing && /^(current|all|none|\d+)$/.test(savedListing)) setFilterListing(savedListing as ListingFilter)
+      const savedSort = localStorage.getItem("admin-prescreening-sort")
+      if (savedSort) {
+        const parsed = JSON.parse(savedSort) as { key?: string; dir?: string }
+        if (parsed.key && parsed.key in DEFAULT_SORT_DIR) setSortKey(parsed.key as SortKey)
+        if (parsed.dir === "asc" || parsed.dir === "desc") setSortDir(parsed.dir)
+      }
     } catch {}
     setFiltersLoaded(true)
   }, [])
@@ -370,8 +432,19 @@ export default function PrescreeningPage() {
     if (!filtersLoaded) return
     try {
       localStorage.setItem("admin-prescreening-status-filter", JSON.stringify(filterStatuses))
+      localStorage.setItem("admin-prescreening-listing-filter", filterListing)
+      localStorage.setItem("admin-prescreening-sort", JSON.stringify({ key: sortKey, dir: sortDir }))
     } catch {}
-  }, [filterStatuses, filtersLoaded])
+  }, [filterStatuses, filterListing, sortKey, sortDir, filtersLoaded])
+
+  function toggleSort(key: SortKey) {
+    if (key === sortKey) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"))
+    } else {
+      setSortKey(key)
+      setSortDir(DEFAULT_SORT_DIR[key])
+    }
+  }
 
   function toggleStatusFilter(s: string) {
     setFilterStatuses((prev) => prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s])
@@ -379,10 +452,14 @@ export default function PrescreeningPage() {
 
   async function loadRecords() {
     try {
-      const res = await fetch("/api/prescreening")
+      const [res, listingsRes] = await Promise.all([fetch("/api/prescreening"), fetch("/api/listings")])
       if (!res.ok) throw new Error("Failed to load")
       const data = await res.json()
       setRecords(Array.isArray(data) ? data : data.data || [])
+      if (listingsRes.ok) {
+        const listingData = await listingsRes.json()
+        setListings(Array.isArray(listingData) ? listingData : [])
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load records")
     } finally {
@@ -400,6 +477,7 @@ export default function PrescreeningPage() {
     setEditRejectReason(record.rejectReason || "")
     setEditShowingDate(record.showingDate || "")
     setEditShowingTime(record.showingTime || "")
+    setEditListingId(record.listingId != null ? String(record.listingId) : "")
     setDialogOpen(true)
   }
 
@@ -434,6 +512,9 @@ export default function PrescreeningPage() {
           rejectReason: nextStatus === "rejected" ? editRejectReason : "",
           showingDate: nextStatus === "scheduled-for-showing" ? editShowingDate : "",
           showingTime: nextStatus === "scheduled-for-showing" ? editShowingTime : "",
+          ...(editListingId !== (selected.listingId != null ? String(selected.listingId) : "")
+            ? { listingId: editListingId === "" ? null : parseInt(editListingId) }
+            : {}),
         }),
       })
       if (!res.ok) throw new Error("Failed to update")
@@ -676,6 +757,92 @@ export default function PrescreeningPage() {
     setTimeout(() => setCopied(false), 2000)
   }
 
+  // Earlier applications by the same person (email or phone) in a different listing round.
+  const priorApplications = new Map<string, PrescreeningRecord[]>()
+  {
+    const byContact = new Map<string, PrescreeningRecord[]>()
+    for (const r of records) {
+      for (const k of [normalizeEmail(r.email), normalizePhone(r.phone)]) {
+        if (!k) continue
+        const list = byContact.get(k) ?? []
+        list.push(r)
+        byContact.set(k, list)
+      }
+    }
+    for (const r of records) {
+      const seen = new Set<string>()
+      const prior: PrescreeningRecord[] = []
+      for (const k of [normalizeEmail(r.email), normalizePhone(r.phone)]) {
+        if (!k) continue
+        for (const o of byContact.get(k) ?? []) {
+          if (o.id === r.id || seen.has(String(o.id))) continue
+          if ((o.listingId ?? null) === (r.listingId ?? null)) continue
+          if ((o.createdAt ?? "") >= (r.createdAt ?? "")) continue
+          seen.add(String(o.id))
+          prior.push(o)
+        }
+      }
+      if (prior.length > 0) {
+        prior.sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""))
+        priorApplications.set(String(r.id), prior)
+      }
+    }
+  }
+
+  const hasListings = listings.length > 0
+  const visibleRecords = records
+    .filter((r) => {
+      if (!hasListings || filterListing === "all") return true
+      if (filterListing === "current") return !r.listing || r.listing.closedAt == null
+      if (filterListing === "none") return r.listingId == null
+      return String(r.listingId) === filterListing
+    })
+    .filter((r) => {
+      if (filterStatuses.length > 0 && !filterStatuses.includes(r.status)) return false
+      if (filterMinScore) {
+        const eff = (r.score ?? 0) + (r.adminRating ?? 0) * 2
+        if (eff < parseInt(filterMinScore)) return false
+      }
+      if (filterMinIncome && (r.monthlyIncome ?? 0) < parseInt(filterMinIncome)) return false
+      if (filterCredit !== "all" && r.creditScoreRange !== filterCredit) return false
+      return true
+    })
+    .sort((a, b) => {
+      let cmp = 0
+      switch (sortKey) {
+        case "name": cmp = getName(a).localeCompare(getName(b), undefined, { sensitivity: "base" }); break
+        case "email": cmp = (a.email || "").localeCompare(b.email || "", undefined, { sensitivity: "base" }); break
+        case "credit": cmp = (CREDIT_RANK[a.creditScoreRange ?? ""] ?? -1) - (CREDIT_RANK[b.creditScoreRange ?? ""] ?? -1); break
+        case "income": cmp = (a.monthlyIncome ?? 0) - (b.monthlyIncome ?? 0); break
+        case "score": cmp = ((a.score ?? 0) + (a.adminRating ?? 0) * 2) - ((b.score ?? 0) + (b.adminRating ?? 0) * 2); break
+        case "status": cmp = statusOptions.indexOf(a.status) - statusOptions.indexOf(b.status); break
+        case "listing": cmp = (a.listing?.openedAt ?? "").localeCompare(b.listing?.openedAt ?? ""); break
+        case "date": cmp = (a.createdAt || a.date || "").localeCompare(b.createdAt || b.date || ""); break
+      }
+      // Ties fall back to newest first so the order is stable.
+      if (cmp === 0) cmp = sortDir === "asc"
+        ? (b.createdAt ?? "").localeCompare(a.createdAt ?? "")
+        : (a.createdAt ?? "").localeCompare(b.createdAt ?? "")
+      return sortDir === "asc" ? cmp : -cmp
+    })
+
+  function sortableHead(column: SortKey, label: string, className?: string) {
+    const active = sortKey === column
+    const Icon = !active ? ArrowUpDown : sortDir === "asc" ? ArrowUp : ArrowDown
+    return (
+      <TableHead key={column} className={className} aria-sort={active ? (sortDir === "asc" ? "ascending" : "descending") : "none"}>
+        <button
+          type="button"
+          onClick={() => toggleSort(column)}
+          className={`inline-flex items-center gap-1 hover:text-foreground ${active ? "text-foreground font-semibold" : ""}`}
+        >
+          {label}
+          <Icon className={`size-3.5 ${active ? "" : "opacity-40"}`} />
+        </button>
+      </TableHead>
+    )
+  }
+
   if (loading) {
     return <div className="flex items-center justify-center py-20 text-muted-foreground">Loading prescreening records...</div>
   }
@@ -729,6 +896,25 @@ export default function PrescreeningPage() {
               })}
             </div>
           </div>
+          {hasListings && (
+            <div className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-muted-foreground">Listing</span>
+              <select
+                className="h-8 rounded-md border border-input bg-transparent px-2 text-sm"
+                value={filterListing}
+                onChange={(e) => setFilterListing(e.target.value as ListingFilter)}
+              >
+                <option value="current">Current listings</option>
+                <option value="all">All listings</option>
+                {listings.map((l) => (
+                  <option key={l.id} value={String(l.id)}>
+                    {l.propertyName ? `${l.propertyName} · ` : ""}{listingName(l)} {l.closedAt ? "(closed)" : "(open)"} · {l.applicationCount}
+                  </option>
+                ))}
+                <option value="none">No listing</option>
+              </select>
+            </div>
+          )}
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground">Min Score</span>
             <input
@@ -785,36 +971,23 @@ export default function PrescreeningPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead className="hidden sm:table-cell">Email</TableHead>
-                <TableHead className="hidden md:table-cell">Credit</TableHead>
-                <TableHead className="hidden md:table-cell">Income</TableHead>
-                <TableHead className="hidden lg:table-cell">Total Score</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="hidden lg:table-cell">Date</TableHead>
+                {sortableHead("name", "Name")}
+                {sortableHead("email", "Email", "hidden sm:table-cell")}
+                {sortableHead("credit", "Credit", "hidden md:table-cell")}
+                {sortableHead("income", "Income", "hidden md:table-cell")}
+                {sortableHead("score", "Total Score", "hidden lg:table-cell")}
+                {sortableHead("status", "Status")}
+                {hasListings && sortableHead("listing", "Listing", "hidden lg:table-cell")}
+                {sortableHead("date", "Date", "hidden lg:table-cell")}
               </TableRow>
             </TableHeader>
             <TableBody>
-              {[...records]
-                .filter((r) => {
-                  if (filterStatuses.length > 0 && !filterStatuses.includes(r.status)) return false
-                  if (filterMinScore) {
-                    const eff = (r.score ?? 0) + (r.adminRating ?? 0) * 2
-                    if (eff < parseInt(filterMinScore)) return false
-                  }
-                  if (filterMinIncome && (r.monthlyIncome ?? 0) < parseInt(filterMinIncome)) return false
-                  if (filterCredit !== "all" && r.creditScoreRange !== filterCredit) return false
-                  return true
-                })
-                .sort((a, b) => {
-                  const aEff = a.adminRating == null ? (a.score ?? 0) : (a.score ?? 0) + a.adminRating * 2
-                  const bEff = b.adminRating == null ? (b.score ?? 0) : (b.score ?? 0) + b.adminRating * 2
-                  return bEff - aEff
-                })
+              {visibleRecords
                 .map((r) => {
                 const sc = statusColors[r.status] || statusColors.new
                 const unscored = r.adminRating == null
                 const petWarning = getPetWarning(r.petsJson)
+                const prior = priorApplications.get(String(r.id))
                 return (
                   <TableRow
                     key={r.id}
@@ -831,6 +1004,16 @@ export default function PrescreeningPage() {
                             title={petWarning}
                           >
                             {petWarning}
+                          </Badge>
+                        )}
+                        {prior && (
+                          <Badge
+                            variant="secondary"
+                            className="bg-slate-100 text-slate-700 border border-slate-200 gap-1"
+                            title={prior.map((o) => `${listingName(o.listing)}: ${statusLabels[o.status] || o.status} (${formatDate(o.createdAt)})`).join("\n")}
+                          >
+                            <History className="size-3" />
+                            Applied before · {listingName(prior[0].listing)} ({statusLabels[prior[0].status] || prior[0].status})
                           </Badge>
                         )}
                       </div>
@@ -853,12 +1036,22 @@ export default function PrescreeningPage() {
                         {statusLabels[r.status] || r.status}
                       </Badge>
                     </TableCell>
+                    {hasListings && (
+                      <TableCell className="hidden lg:table-cell">
+                        <span className={r.listing && r.listing.closedAt == null ? "" : "text-muted-foreground"}>
+                          {listingName(r.listing)}
+                        </span>
+                      </TableCell>
+                    )}
                     <TableCell className="hidden lg:table-cell">{formatDate(r.createdAt || r.date)}</TableCell>
                   </TableRow>
                 )
               })}
             </TableBody>
           </Table>
+          {visibleRecords.length === 0 && (
+            <div className="p-8 text-center text-sm text-muted-foreground">No applications match these filters</div>
+          )}
         </div>
         </>
       )}
@@ -874,7 +1067,10 @@ export default function PrescreeningPage() {
               })()}
             </DialogTitle>
             {selected && (
-              <p className="text-sm text-muted-foreground">{selected.email} &middot; Applied {formatDate(selected.createdAt || selected.date)}</p>
+              <p className="text-sm text-muted-foreground">
+                {selected.email} &middot; Applied {formatDate(selected.createdAt || selected.date)}
+                {hasListings && <> &middot; {selected.propertyName ? `${selected.propertyName} · ` : ""}{listingName(selected.listing)}{selected.listing?.closedAt ? " (closed)" : ""}</>}
+              </p>
             )}
           </DialogHeader>
           {selected && (
@@ -986,6 +1182,26 @@ export default function PrescreeningPage() {
                       ))}
                     </select>
                   </div>
+
+                  {hasListings && (
+                    <div className="flex flex-col gap-2">
+                      <Label>Listing round</Label>
+                      <select
+                        className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                        value={editListingId}
+                        onChange={(e) => setEditListingId(e.target.value)}
+                      >
+                        <option value="">No listing</option>
+                        {listings
+                          .filter((l) => selected.propertyId == null || l.propertyId === selected.propertyId)
+                          .map((l) => (
+                            <option key={l.id} value={String(l.id)}>
+                              {listingName(l)} {l.closedAt ? "(closed)" : "(open)"}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+                  )}
 
                   {editStatus === "rejected" && (
                     <div className="flex flex-col gap-2">

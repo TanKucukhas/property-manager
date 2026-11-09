@@ -22,7 +22,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const db = await getDb();
   const { id } = await params;
   const body = await request.json();
-  const { status, adminNotes, adminRating, rejectReason, showingDate, showingTime, aiAnalysis } = body;
+  const { status, adminNotes, adminRating, rejectReason, showingDate, showingTime, aiAnalysis, listingId } = body;
 
   const updates: Record<string, unknown> = { updatedAt: new Date().toISOString() };
   if (status) updates.status = status;
@@ -33,6 +33,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (showingDate !== undefined) updates.showingDate = showingDate;
   if (showingTime !== undefined) updates.showingTime = showingTime;
   if (status && status !== "scheduled-for-showing") { updates.showingDate = null; updates.showingTime = null; }
+  if (listingId !== undefined) {
+    const parsedListingId = listingId === null ? null : parseInt(listingId);
+    if (parsedListingId !== null && Number.isNaN(parsedListingId)) {
+      return NextResponse.json({ error: "Invalid listingId" }, { status: 400 });
+    }
+    updates.listingId = parsedListingId;
+  }
   if (aiAnalysis !== undefined) {
     updates.aiAnalysis = aiAnalysis === null ? null : (typeof aiAnalysis === "string" ? aiAnalysis : JSON.stringify(aiAnalysis));
     updates.aiAnalysisDate = aiAnalysis === null ? null : new Date().toISOString();

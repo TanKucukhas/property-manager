@@ -4,6 +4,7 @@ import { properties } from "@/db/schema";
 import { propertySchema } from "@/lib/validations";
 import { getSession } from "@/lib/auth";
 import { desc } from "drizzle-orm";
+import { ensureOpenListing } from "@/lib/listings";
 
 export async function GET() {
   const session = await getSession();
@@ -25,5 +26,6 @@ export async function POST(request: Request) {
   }
 
   const result = await db.insert(properties).values(parsed.data).returning().get();
+  if (result.status === "available") await ensureOpenListing(db, result.id);
   return NextResponse.json(result);
 }

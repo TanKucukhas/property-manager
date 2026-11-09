@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { tenants } from "@/db/schema";
+import { tenants, propertyListings } from "@/db/schema";
 import { tenantSchema } from "@/lib/validations";
 import { getSession } from "@/lib/auth";
-import { desc } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 
 export async function GET() {
   const session = await getSession();
@@ -25,5 +25,20 @@ export async function POST(request: Request) {
   }
 
   const result = await db.insert(tenants).values(parsed.data).returning().get();
+
+  if (result.propertyId) {
+    const listing = await db
+      .select({ id: propertyListings.id })
+      .from(propertyListings)
+      .where(and(eq(propertyListings.propertyId, result.propertyId), isNull(propertyListings.tenantId)))
+      .orderBy(desc(propertyListings.openedAt))
+      .get();
+    if (listing) {
+      await db.update(propertyListings)
+        .set({ tenantId: result.id, updatedAt: new Date().toISOString() })
+        .where(eq(propertyListings.id, listing.id))
+        .run();
+    }
+  }
   return NextResponse.json(result);
 }

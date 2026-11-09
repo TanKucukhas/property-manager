@@ -20,7 +20,8 @@ npm run cf:d1:backup     # Export D1 before migrations
 
 ### Migrations
 
-- Files in `migrations/` (0001–0010), run with `npm run cf:d1:migrate`
+- Files in `migrations/` (0001–0011), run with `npm run cf:d1:migrate`
+- One-off data fixes that need UPDATE live in `scripts/d1/` (outside the migrate guard), run manually after a backup
 - Script blocks destructive SQL (DROP/DELETE/TRUNCATE/UPDATE)
 - ALTER TABLE duplicates are tolerated (skipped with error message)
 - No rollback — fix forward with new migration files
@@ -34,6 +35,7 @@ npm run cf:d1:backup     # Export D1 before migrations
 - Email: Brevo API (`src/lib/mailer.ts`)
 - Scoring: `src/lib/validations.ts` — system score 0-80, admin rating 0-10 (×2)
 - AI rating: `src/lib/ai-prescreening-prompt.ts` — generates prompt for Claude/ChatGPT
+- Listing rounds: `property_listings` + `prescreenings.listing_id` (`src/lib/listings.ts`). Property status → `available` opens a round, leaving `available` closes it; new applications attach to the open round
 
 ## Key Constraints
 

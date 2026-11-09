@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { prescreenings, applicationShares, shareVisits, properties } from "@/db/schema";
+import { prescreenings, applicationShares, shareVisits, properties, propertyListings } from "@/db/schema";
+import { ensureOpenListing, getOpenListing } from "@/lib/listings";
 import { prescreeningSchema, scorePrescreening } from "@/lib/validations";
 import { and, desc, eq } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
@@ -23,6 +24,16 @@ export async function POST(request: Request) {
       ? await db.select().from(properties).where(eq(properties.id, data.propertyId)).get()
       : null;
     const { score, flags } = scorePrescreening(data, property);
+
+    // Attach to the property's current listing round. Applications that come in
+    // while the property is off the market stay unassigned.
+    let listingId: number | null = null;
+    if (property) {
+      const listing = property.status === "available"
+        ? await ensureOpenListing(db, property.id)
+        : await getOpenListing(db, property.id);
+      listingId = listing?.id ?? null;
+    }
 
     let shareId: number | null = null;
     let leadInfo: ShareLeadInfo | null = null;
@@ -49,6 +60,7 @@ export async function POST(request: Request) {
       score,
       status: "new",
       shareId,
+      listingId,
     }).returning().get();
 
     if (shareId) {
@@ -132,12 +144,27 @@ export async function GET() {
         notes: applicationShares.notes,
         createdAt: applicationShares.createdAt,
       },
+      listing: {
+        id: propertyListings.id,
+        label: propertyListings.label,
+        openedAt: propertyListings.openedAt,
+        closedAt: propertyListings.closedAt,
+        placedPrescreeningId: propertyListings.placedPrescreeningId,
+      },
+      propertyName: properties.name,
     })
     .from(prescreenings)
     .leftJoin(applicationShares, eq(prescreenings.shareId, applicationShares.id))
+    .leftJoin(propertyListings, eq(prescreenings.listingId, propertyListings.id))
+    .leftJoin(properties, eq(prescreenings.propertyId, properties.id))
     .orderBy(desc(prescreenings.createdAt))
     .all();
 
-  const flat = records.map((r: typeof records[number]) => ({ ...r.prescreening, share: r.share?.id ? r.share : null }));
+  const flat = records.map((r: typeof records[number]) => ({
+    ...r.prescreening,
+    share: r.share?.id ? r.share : null,
+    listing: r.listing?.id ? r.listing : null,
+    propertyName: r.propertyName ?? null,
+  }));
   return NextResponse.json(flat);
 }

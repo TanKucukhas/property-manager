@@ -49,6 +49,22 @@ export const properties = sqliteTable("properties", {
   updatedAt: text("updated_at").notNull().$defaultFn(() => new Date().toISOString()),
 });
 
+// One row per time a property goes on the market. Prescreenings attach to the
+// listing that was open when they were submitted, so applicants from earlier
+// rounds stay separate from the current one.
+export const propertyListings = sqliteTable("property_listings", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  propertyId: integer("property_id").references(() => properties.id).notNull(),
+  label: text("label"),
+  openedAt: text("opened_at").notNull(),
+  closedAt: text("closed_at"),
+  placedPrescreeningId: integer("placed_prescreening_id"),
+  tenantId: integer("tenant_id"),
+  notes: text("notes"),
+  createdAt: text("created_at").notNull().$defaultFn(() => new Date().toISOString()),
+  updatedAt: text("updated_at").notNull().$defaultFn(() => new Date().toISOString()),
+});
+
 export const prescreenings = sqliteTable("prescreenings", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   propertyId: integer("property_id").references(() => properties.id),
@@ -123,6 +139,7 @@ export const prescreenings = sqliteTable("prescreenings", {
   showingTime: text("showing_time"),
   adminNotes: text("admin_notes"),
   shareId: integer("share_id"),
+  listingId: integer("listing_id"),
   createdAt: text("created_at").notNull().$defaultFn(() => new Date().toISOString()),
   updatedAt: text("updated_at").notNull().$defaultFn(() => new Date().toISOString()),
 });
