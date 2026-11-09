@@ -578,24 +578,14 @@ export default function PrescreeningPage() {
     if (!selected || !aiParsed) return
     setAiSaving(true)
     try {
-      const status = aiParsed.recommendedStatus
+      // Step 1 only: store the AI analysis. Rating, notes, status and reject
+      // reason are the manager's (Review & Decide screen).
       const res = await fetch(`/api/prescreening/${selected.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          status,
-          adminRating: aiParsed.adminRating,
-          adminNotes: aiParsed.adminNotes,
-          rejectReason: status === "rejected" ? (aiParsed.rejectReason || "") : "",
-          aiAnalysis: aiParsed,
-        }),
+        body: JSON.stringify({ aiAnalysis: aiParsed }),
       })
       if (!res.ok) throw new Error("Failed to save")
-      // Reflect the new values in the open detail dialog so admin sees them immediately.
-      setEditStatus(status)
-      setEditRating(aiParsed.adminRating)
-      setEditNotes(aiParsed.adminNotes)
-      if (status === "rejected") setEditRejectReason(aiParsed.rejectReason || "")
       setAiDialogOpen(false)
       loadRecords()
     } catch (err) {
@@ -1629,7 +1619,7 @@ export default function PrescreeningPage() {
               </Button>
               {aiStep === "review" && (
                 <Button onClick={handleAiSave} disabled={aiSaving}>
-                  {aiSaving ? "Saving…" : "Save to application"}
+                  {aiSaving ? "Saving…" : "Save AI analysis"}
                 </Button>
               )}
             </div>

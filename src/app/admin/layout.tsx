@@ -22,7 +22,7 @@ import {
 const navItems = [
   { label: "Dashboard", href: "/admin", icon: LayoutDashboardIcon },
   { label: "Prescreening", href: "/admin/prescreening", icon: ClipboardListIcon },
-  { label: "Decide", href: "/admin/prescreening/decide", icon: GavelIcon },
+  { label: "Review & Decide", href: "/admin/prescreening/decide", icon: GavelIcon },
   { label: "Shares", href: "/admin/shares", icon: Share2Icon },
   { label: "Properties", href: "/admin/properties", icon: BuildingIcon },
   { label: "Tenants", href: "/admin/tenants", icon: UsersIcon },

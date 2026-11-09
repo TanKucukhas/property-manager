@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { prescreenings, applicationShares, shareVisits, properties, propertyListings } from "@/db/schema";
+import { aiJobs, prescreenings, applicationShares, shareVisits, properties, propertyListings } from "@/db/schema";
 import { ensureOpenListing, getOpenListing } from "@/lib/listings";
 import { prescreeningSchema, scorePrescreening } from "@/lib/validations";
 import { and, desc, eq } from "drizzle-orm";
@@ -62,6 +62,18 @@ export async function POST(request: Request) {
       shareId,
       listingId,
     }).returning().get();
+
+    // Step 1 of the review flow: every new application is analyzed by AI
+    // automatically (the Mac runner picks these up). Failure here must never
+    // block the applicant's submission.
+    try {
+      const requestedAt = new Date().toISOString();
+      await db.insert(aiJobs).values(
+        ["claude", "openai"].map((provider) => ({ prescreeningId: result.id, provider, status: "queued", requestedAt })),
+      ).run();
+    } catch (err) {
+      console.error("Auto-queue AI analysis failed", err);
+    }
 
     if (shareId) {
       const now = new Date().toISOString();
