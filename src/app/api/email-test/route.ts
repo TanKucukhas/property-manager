@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { sendEmail } from "@/lib/mailer";
+import { getSession } from "@/lib/auth";
 
 export async function POST() {
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const uid = crypto.randomUUID();
   console.log(`[EMAIL-TEST] uid=${uid} — starting`);
 
@@ -13,7 +17,8 @@ export async function POST() {
     });
 
     console.log(`[EMAIL-TEST] uid=${uid} — result:`, JSON.stringify(result));
-    return NextResponse.json({ success: true, uid, result });
+    // sendEmail returns null when the key is missing or Brevo rejects the request.
+    return NextResponse.json({ success: result !== null, uid, result, ...(result === null ? { error: "Brevo did not accept the email — check the Worker logs (wrangler tail) for the reason" } : {}) }, { status: result === null ? 502 : 200 });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(`[EMAIL-TEST] uid=${uid} — error:`, message);
