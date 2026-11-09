@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { prescreenings, properties, shareVisits } from "@/db/schema";
+import { aiJobs, prescreenings, properties, shareVisits } from "@/db/schema";
 import { scorePrescreening } from "@/lib/validations";
 import { eq } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
@@ -97,6 +97,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
       .where(eq(shareVisits.submittedPrescreeningId, parsedId))
       .run();
 
+    await db.delete(aiJobs).where(eq(aiJobs.prescreeningId, parsedId)).run();
     await db.delete(prescreenings).where(eq(prescreenings.id, parsedId)).run();
     return NextResponse.json({ success: true });
   } catch (e) {

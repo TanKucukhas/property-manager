@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- launchd agent: keeps the AI runner alive while you are logged in.
+     install.sh fills in __REPO__ and __HOME__ and loads it. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.cresiq.ai-runner</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/homebrew/bin/node</string>
+    <string>__REPO__/ai-runner/runner.mjs</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:__HOME__/.local/bin</string>
+    <key>HOME</key><string>__HOME__</string>
+  </dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>ThrottleInterval</key><integer>30</integer>
+  <key>StandardOutPath</key><string>__HOME__/Library/Logs/cresiq-ai-runner.log</string>
+  <key>StandardErrorPath</key><string>__HOME__/Library/Logs/cresiq-ai-runner.log</string>
+</dict>
+</plist>

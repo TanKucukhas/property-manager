@@ -112,6 +112,20 @@ function looksYearly(monthly: number | undefined | null) {
   return monthly != null && monthly >= 15000
 }
 
+type AiJob = {
+  id: number
+  provider: "claude" | "openai"
+  model: string | null
+  status: "queued" | "running" | "done" | "error"
+  result: string | null
+  error: string | null
+  requestedAt: string
+  startedAt: string | null
+  completedAt: string | null
+}
+type AiRunnerStatus = { online: boolean; lastSeenAt: string | null; providers: string[] }
+const AI_PROVIDER_LABEL: Record<AiJob["provider"], string> = { claude: "Claude", openai: "OpenAI" }
+
 function formatCurrency(value: number | undefined) {
   if (value == null) return "-"
   return new Intl.NumberFormat("en-US", {
@@ -415,6 +429,53 @@ export default function PrescreeningPage() {
   const [aiParsed, setAiParsed] = useState<PrescreeningAIAnalysis | null>(null)
   const [aiSaving, setAiSaving] = useState(false)
   const [aiLoadingPrompt, setAiLoadingPrompt] = useState(false)
+  const [aiJobsList, setAiJobsList] = useState<AiJob[]>([])
+  const [aiRunner, setAiRunner] = useState<AiRunnerStatus | null>(null)
+  const [aiQueueing, setAiQueueing] = useState(false)
+  const [aiQueueError, setAiQueueError] = useState("")
+
+  const aiDialogPrescreeningId = aiDialogOpen ? selected?.id : undefined
+  useEffect(() => {
+    if (aiDialogPrescreeningId == null) return
+    let cancelled = false
+    async function poll() {
+      try {
+        const res = await fetch(`/api/ai-jobs?prescreeningId=${aiDialogPrescreeningId}`)
+        if (!res.ok || cancelled) return
+        const data = await res.json()
+        setAiJobsList(Array.isArray(data.jobs) ? data.jobs : [])
+        setAiRunner(data.runner ?? null)
+      } catch {}
+    }
+    setAiJobsList([])
+    setAiQueueError("")
+    poll()
+    const timer = setInterval(poll, 4000)
+    return () => { cancelled = true; clearInterval(timer) }
+  }, [aiDialogPrescreeningId])
+
+  async function queueAiJobs(providers: AiJob["provider"][]) {
+    if (!selected) return
+    setAiQueueing(true)
+    setAiQueueError("")
+    try {
+      const res = await fetch("/api/ai-jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prescreeningIds: [selected.id], providers }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || "Failed to queue")
+      if (data.queued === 0) setAiQueueError("Already queued or running for this applicant.")
+      const list = await fetch(`/api/ai-jobs?prescreeningId=${selected.id}`).then((r) => r.json())
+      setAiJobsList(Array.isArray(list.jobs) ? list.jobs : [])
+      if (list.runner) setAiRunner(list.runner)
+    } catch (err) {
+      setAiQueueError(err instanceof Error ? err.message : "Failed to queue")
+    } finally {
+      setAiQueueing(false)
+    }
+  }
 
   useEffect(() => {
     try {
@@ -1401,9 +1462,55 @@ export default function PrescreeningPage() {
           <div className="flex-1 overflow-y-auto pr-1">
             {aiStep === "input" && (
               <div className="space-y-5">
+                <div className="rounded-lg border border-violet-200 bg-violet-50/50 p-3 dark:border-violet-900 dark:bg-violet-950/20">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm font-medium">Analyze automatically</p>
+                    <span className="text-xs text-muted-foreground">
+                      {aiRunner?.online
+                        ? `Runner online: ${aiRunner.providers.map((p) => AI_PROVIDER_LABEL[p as AiJob["provider"]] ?? p).join(", ")}`
+                        : aiRunner?.lastSeenAt
+                          ? `Runner offline (last seen ${formatDate(aiRunner.lastSeenAt)}) — jobs wait in queue`
+                          : "No runner connected yet — jobs wait in queue"}
+                    </span>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {(["claude", "openai"] as const).map((p) => (
+                      <Button key={p} size="sm" variant="outline" className="gap-1" disabled={aiQueueing} onClick={() => queueAiJobs([p])}>
+                        <Sparkles className="size-3" /> {AI_PROVIDER_LABEL[p]}
+                      </Button>
+                    ))}
+                    <Button size="sm" className="gap-1" disabled={aiQueueing} onClick={() => queueAiJobs(["claude", "openai"])}>
+                      <Sparkles className="size-3" /> Both
+                    </Button>
+                  </div>
+                  {aiQueueError && <p className="mt-2 text-sm text-destructive">{aiQueueError}</p>}
+                  {aiJobsList.length > 0 && (
+                    <ul className="mt-3 space-y-1.5">
+                      {aiJobsList.map((job) => (
+                        <li key={job.id} className="flex flex-wrap items-center gap-2 rounded-md bg-background px-2 py-1.5 text-sm">
+                          <span className="font-medium">{AI_PROVIDER_LABEL[job.provider] ?? job.provider}</span>
+                          <Badge variant={job.status === "error" ? "destructive" : job.status === "done" ? "default" : "secondary"}>
+                            {job.status === "queued" ? "Queued" : job.status === "running" ? "Running…" : job.status === "done" ? "Done" : "Failed"}
+                          </Badge>
+                          {job.model && <span className="text-xs text-muted-foreground">{job.model}</span>}
+                          <span className="text-xs text-muted-foreground">{formatDate(job.completedAt || job.requestedAt)}</span>
+                          {job.status === "done" && job.result && (
+                            <Button size="sm" variant="outline" className="ml-auto h-7" onClick={() => handleAiPasteChange(job.result as string)}>
+                              Review result
+                            </Button>
+                          )}
+                          {job.status === "error" && job.error && (
+                            <p className="w-full text-xs text-destructive break-words">{job.error.slice(0, 300)}</p>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <p className="text-sm font-medium">1. Copy this prompt → paste into Claude / ChatGPT</p>
+                    <p className="text-sm font-medium">Or manually: 1. Copy this prompt → paste into Claude / ChatGPT</p>
                     <Button
                       size="sm"
                       variant="outline"

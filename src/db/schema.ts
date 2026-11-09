@@ -254,3 +254,24 @@ export const maintenanceRequests = sqliteTable("maintenance_requests", {
   createdAt: text("created_at").notNull().$defaultFn(() => new Date().toISOString()),
   updatedAt: text("updated_at").notNull().$defaultFn(() => new Date().toISOString()),
 });
+
+export const aiJobs = sqliteTable("ai_jobs", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  prescreeningId: integer("prescreening_id").notNull().references(() => prescreenings.id),
+  provider: text("provider").notNull(), // "claude" | "openai"
+  model: text("model"),
+  status: text("status").notNull().default("queued"), // queued | running | done | error
+  result: text("result"),
+  error: text("error"),
+  attempts: integer("attempts").notNull().default(0),
+  requestedAt: text("requested_at").notNull().$defaultFn(() => new Date().toISOString()),
+  startedAt: text("started_at"),
+  completedAt: text("completed_at"),
+});
+
+export const aiRunnerHeartbeat = sqliteTable("ai_runner_heartbeat", {
+  id: integer("id").primaryKey(),
+  lastSeenAt: text("last_seen_at").notNull(),
+  providers: text("providers"),
+  info: text("info"),
+});
