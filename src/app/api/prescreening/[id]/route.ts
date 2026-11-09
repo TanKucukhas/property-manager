@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { prescreenings, shareVisits } from "@/db/schema";
+import { prescreenings, properties, shareVisits } from "@/db/schema";
+import { scorePrescreening } from "@/lib/validations";
 import { eq } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
 
@@ -22,7 +23,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const db = await getDb();
   const { id } = await params;
   const body = await request.json();
-  const { status, adminNotes, adminRating, rejectReason, showingDate, showingTime, aiAnalysis, listingId } = body;
+  const { status, adminNotes, adminRating, rejectReason, showingDate, showingTime, aiAnalysis, listingId, monthlyIncome } = body;
+  const incomeCorrectionReason = typeof body.incomeCorrectionReason === "string" ? body.incomeCorrectionReason.slice(0, 200) : "";
 
   const updates: Record<string, unknown> = { updatedAt: new Date().toISOString() };
   if (status) updates.status = status;
@@ -39,6 +41,31 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       return NextResponse.json({ error: "Invalid listingId" }, { status: 400 });
     }
     updates.listingId = parsedListingId;
+  }
+  if (monthlyIncome !== undefined) {
+    const nextIncome = Math.round(Number(monthlyIncome) * 100) / 100;
+    if (!Number.isFinite(nextIncome) || nextIncome < 0) {
+      return NextResponse.json({ error: "Invalid monthlyIncome" }, { status: 400 });
+    }
+    const record = await db.select().from(prescreenings).where(eq(prescreenings.id, parseInt(id))).get();
+    if (!record) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    if (record.monthlyIncome !== nextIncome) {
+      const property = record.propertyId
+        ? await db.select().from(properties).where(eq(properties.id, record.propertyId)).get()
+        : null;
+      // Re-score with the corrected income; every other answer stays as submitted.
+      const { score } = scorePrescreening(
+        { ...record, monthlyIncome: nextIncome } as unknown as Parameters<typeof scorePrescreening>[0],
+        property,
+      );
+      updates.monthlyIncome = nextIncome;
+      updates.score = score;
+      // Keep the originally submitted value visible in the notes.
+      const fmt = (n: number) => `$${n.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
+      const line = `[${new Date().toISOString().slice(0, 10)}] Monthly income corrected ${fmt(record.monthlyIncome)} → ${fmt(nextIncome)}${incomeCorrectionReason ? ` (${incomeCorrectionReason})` : ""}`;
+      const baseNotes = (updates.adminNotes as string | undefined) ?? record.adminNotes ?? "";
+      updates.adminNotes = baseNotes ? `${baseNotes}\n${line}` : line;
+    }
   }
   if (aiAnalysis !== undefined) {
     updates.aiAnalysis = aiAnalysis === null ? null : (typeof aiAnalysis === "string" ? aiAnalysis : JSON.stringify(aiAnalysis));

@@ -176,6 +176,10 @@ export default function ApplyPage() {
   const [shareToken, setShareToken] = useState<string | null>(null);
   const [visitorId, setVisitorId] = useState<string | null>(null);
   const [propertyLockedByShare, setPropertyLockedByShare] = useState(false);
+  // Applicants sometimes type yearly salary into the monthly field, so we ask
+  // which one they mean and always submit a monthly figure.
+  const [incomePeriod, setIncomePeriod] = useState<"monthly" | "yearly">("monthly");
+  const [incomeConfirmed, setIncomeConfirmed] = useState(false);
 
   const { register, handleSubmit, watch, trigger, setValue, formState: { errors, isSubmitting } } = useForm<FormData>({
     defaultValues: { numAdults: 1, numChildren: 0 },
@@ -251,6 +255,14 @@ export default function ApplyPage() {
   const owes = watch("oweMoneyToLandlord");
   const damage = watch("causedPropertyDamage");
   const usingVoucher = watch("usingVoucher");
+  const incomeAmount = watch("grossMonthlyIncome");
+  const incomeAmountValid = typeof incomeAmount === "number" && !Number.isNaN(incomeAmount) && incomeAmount > 0;
+  const monthlyIncomeValue = incomeAmountValid ? (incomePeriod === "yearly" ? incomeAmount / 12 : incomeAmount) : 0;
+  // Monthly ≥ $15k looks like a yearly figure; yearly < $6k looks like a monthly one.
+  const incomeLooksWrong = incomeAmountValid && (
+    incomePeriod === "monthly" ? incomeAmount >= 15000 : incomeAmount < 6000
+  );
+  useEffect(() => { setIncomeConfirmed(false); }, [incomeAmount, incomePeriod]);
   const showExplanation = [broken, asked, eviction, owes, damage].some(v => v === "true");
 
   // Update selected property when dropdown changes
@@ -269,6 +281,11 @@ export default function ApplyPage() {
     if (step === 3 && !allOccupantsFilled) {
       setValue("occupantNames", "", { shouldValidate: true });
       toast.error("Please enter a name for every occupant.");
+      return;
+    }
+    if (step === 5 && incomeLooksWrong && !incomeConfirmed) {
+      toast.error("Please confirm whether your income is monthly or yearly.");
+      document.getElementById("grossMonthlyIncome")?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
     setStep(s => Math.min(s + 1, TOTAL_STEPS - 1));
@@ -293,7 +310,7 @@ export default function ApplyPage() {
         moveReason: data.reasonForMove, employmentStatus: data.employmentStatus,
         employerName: data.employerName, jobTitle: data.jobTitle,
         employmentLength: data.employerLength, incomeSources: data.incomeSources,
-        monthlyIncome: data.grossMonthlyIncome,
+        monthlyIncome: Math.round((incomePeriod === "yearly" ? data.grossMonthlyIncome / 12 : data.grossMonthlyIncome) * 100) / 100,
         meetsIncomeRequirement: data.incomeExceeds === "true",
         canProvideProofOfIncome: data.canProveIncome === "true",
         canPayMoveIn: data.canPayMoveIn === "true",
@@ -707,9 +724,56 @@ export default function ApplyPage() {
             <CardHeader><CardTitle className="text-2xl">Income & Move-in Funds</CardTitle></CardHeader>
             <CardContent className="space-y-6">
               <div>
-                <Label htmlFor="grossMonthlyIncome" required>Gross Monthly Household Income ($)</Label>
-                <input id="grossMonthlyIncome" type="number" min={0} step="0.01" className={input} {...register("grossMonthlyIncome", { required: "Required", valueAsNumber: true })} />
+                <Label htmlFor="grossMonthlyIncome" required>Gross Household Income, before taxes ($)</Label>
+                <p className="mt-1 text-sm text-muted-foreground">Combined income of all adults. Choose whether the amount is per month or per year.</p>
+                <div className="mt-2 grid grid-cols-2 gap-3" role="radiogroup" aria-label="Income period">
+                  {(["monthly", "yearly"] as const).map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      role="radio"
+                      aria-checked={incomePeriod === p}
+                      onClick={() => setIncomePeriod(p)}
+                      className={`rounded-xl border-2 p-3 text-center text-lg font-medium transition ${incomePeriod === p ? "border-primary bg-primary/5" : ""}`}
+                    >
+                      {p === "monthly" ? "Per month" : "Per year"}
+                    </button>
+                  ))}
+                </div>
+                <input
+                  id="grossMonthlyIncome"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  inputMode="decimal"
+                  placeholder={incomePeriod === "monthly" ? "e.g. 4500" : "e.g. 54000"}
+                  className={input}
+                  {...register("grossMonthlyIncome", { required: "Required", valueAsNumber: true, min: { value: 1, message: "Enter your income" } })}
+                />
                 <Err msg={errors.grossMonthlyIncome?.message} />
+                {incomeAmountValid && (
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    = <span className="font-medium text-foreground">${monthlyIncomeValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}/month</span>
+                    {" · "}${(monthlyIncomeValue * 12).toLocaleString(undefined, { maximumFractionDigits: 0 })}/year
+                  </p>
+                )}
+                {incomeLooksWrong && !incomeConfirmed && (
+                  <div className="mt-3 rounded-xl border border-amber-400 bg-amber-50 p-4 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+                    <p className="font-medium">
+                      {incomePeriod === "monthly"
+                        ? `Is $${incomeAmount.toLocaleString()} really your monthly income? That would be $${(incomeAmount * 12).toLocaleString()} per year.`
+                        : `Is $${incomeAmount.toLocaleString()} really your yearly income? That is only $${Math.round(incomeAmount / 12).toLocaleString()} per month.`}
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Button type="button" variant="outline" onClick={() => setIncomePeriod(incomePeriod === "monthly" ? "yearly" : "monthly")}>
+                        No, it&apos;s {incomePeriod === "monthly" ? "per year" : "per month"}
+                      </Button>
+                      <Button type="button" variant="outline" onClick={() => setIncomeConfirmed(true)}>
+                        Yes, it&apos;s correct
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
               <div>
                 <Label required>Does your household income equal or exceed ${incomeReq}/month?</Label>

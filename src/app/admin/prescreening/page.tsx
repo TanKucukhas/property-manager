@@ -107,6 +107,11 @@ function formatDate(d: string | undefined) {
   })
 }
 
+/** Same heuristic as the apply form: ≥ $15k/month is most likely a yearly salary. */
+function looksYearly(monthly: number | undefined | null) {
+  return monthly != null && monthly >= 15000
+}
+
 function formatCurrency(value: number | undefined) {
   if (value == null) return "-"
   return new Intl.NumberFormat("en-US", {
@@ -398,6 +403,8 @@ export default function PrescreeningPage() {
   const [sortKey, setSortKey] = useState<SortKey>("date")
   const [sortDir, setSortDir] = useState<SortDir>("desc")
   const [editListingId, setEditListingId] = useState<string>("")
+  const [editIncome, setEditIncome] = useState<string>("")
+  const [incomeReason, setIncomeReason] = useState("")
 
   const [aiDialogOpen, setAiDialogOpen] = useState(false)
   const [aiStep, setAiStep] = useState<"input" | "review">("input")
@@ -478,6 +485,8 @@ export default function PrescreeningPage() {
     setEditShowingDate(record.showingDate || "")
     setEditShowingTime(record.showingTime || "")
     setEditListingId(record.listingId != null ? String(record.listingId) : "")
+    setEditIncome(record.monthlyIncome != null ? String(record.monthlyIncome) : "")
+    setIncomeReason("")
     setDialogOpen(true)
   }
 
@@ -499,6 +508,12 @@ export default function PrescreeningPage() {
 
   async function handleSave() {
     if (!selected) return
+    const parsedIncome = parseFloat(editIncome)
+    const incomeChanged = editIncome.trim() !== "" && Number.isFinite(parsedIncome) && parsedIncome !== (selected.monthlyIncome ?? null)
+    if (editIncome.trim() !== "" && (!Number.isFinite(parsedIncome) || parsedIncome < 0)) {
+      alert("Monthly income must be a positive number")
+      return
+    }
     setSaving(true)
     const nextStatus = editStatus === "new" && editRating > 0 ? "review" : editStatus
     try {
@@ -514,6 +529,9 @@ export default function PrescreeningPage() {
           showingTime: nextStatus === "scheduled-for-showing" ? editShowingTime : "",
           ...(editListingId !== (selected.listingId != null ? String(selected.listingId) : "")
             ? { listingId: editListingId === "" ? null : parseInt(editListingId) }
+            : {}),
+          ...(incomeChanged
+            ? { monthlyIncome: parseFloat(editIncome), incomeCorrectionReason: incomeReason || "edited by admin" }
             : {}),
         }),
       })
@@ -1020,7 +1038,12 @@ export default function PrescreeningPage() {
                     </TableCell>
                     <TableCell className="hidden sm:table-cell">{r.email}</TableCell>
                     <TableCell className="hidden md:table-cell">{r.creditScoreRange ?? "-"}</TableCell>
-                    <TableCell className="hidden md:table-cell">{formatCurrency(r.monthlyIncome)}</TableCell>
+                    <TableCell className="hidden md:table-cell">
+                      {formatCurrency(r.monthlyIncome)}
+                      {looksYearly(r.monthlyIncome) && (
+                        <span className="ml-1 rounded bg-amber-100 px-1 text-[10px] font-medium text-amber-800 dark:bg-amber-950 dark:text-amber-300" title="Probably a yearly amount entered as monthly">yearly?</span>
+                      )}
+                    </TableCell>
                     <TableCell className="hidden lg:table-cell">
                       {unscored ? (
                         <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-800">Unscored</Badge>
@@ -1181,6 +1204,46 @@ export default function PrescreeningPage() {
                         <option key={s} value={s}>{statusLabels[s] || s}</option>
                       ))}
                     </select>
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    <Label>Monthly income</Label>
+                    <div className="flex gap-2">
+                      <input
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                        value={editIncome}
+                        onChange={(e) => { setEditIncome(e.target.value); setIncomeReason("edited by admin") }}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-9 shrink-0"
+                        title="Applicant entered a yearly amount — divide by 12"
+                        onClick={() => {
+                          const v = parseFloat(editIncome)
+                          if (!Number.isFinite(v)) return
+                          setEditIncome(String(Math.round((v / 12) * 100) / 100))
+                          setIncomeReason("applicant entered yearly income")
+                        }}
+                      >
+                        ÷12
+                      </Button>
+                    </div>
+                    {(() => {
+                      const v = parseFloat(editIncome)
+                      const changed = Number.isFinite(v) && v !== (selected.monthlyIncome ?? null)
+                      if (changed) {
+                        return <p className="text-xs text-amber-600">Was {formatCurrency(selected.monthlyIncome)} — system score is recalculated on save.</p>
+                      }
+                      if (looksYearly(selected.monthlyIncome)) {
+                        return <p className="text-xs text-amber-600">Looks like a yearly figure. Use ÷12 if so.</p>
+                      }
+                      return <p className="text-xs text-muted-foreground">Fix it here if the applicant entered it wrong.</p>
+                    })()}
                   </div>
 
                   {hasListings && (
