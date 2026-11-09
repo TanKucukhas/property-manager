@@ -20,7 +20,7 @@ npm run cf:d1:backup     # Export D1 before migrations
 
 ### Migrations
 
-- Files in `migrations/` (0001–0012), run with `npm run cf:d1:migrate`
+- Files in `migrations/` (0001–0013), run with `npm run cf:d1:migrate`
 - One-off data fixes that need UPDATE live in `scripts/d1/` (outside the migrate guard), run manually after a backup
 - Script blocks destructive SQL (DROP/DELETE/TRUNCATE/UPDATE)
 - ALTER TABLE duplicates are tolerated (skipped with error message)

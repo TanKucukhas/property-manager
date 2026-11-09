@@ -264,6 +264,7 @@ export const aiJobs = sqliteTable("ai_jobs", {
   result: text("result"),
   error: text("error"),
   attempts: integer("attempts").notNull().default(0),
+  instructions: text("instructions"), // admin feedback for a re-analysis
   requestedAt: text("requested_at").notNull().$defaultFn(() => new Date().toISOString()),
   startedAt: text("started_at"),
   completedAt: text("completed_at"),

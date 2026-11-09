@@ -45,6 +45,7 @@ export async function POST(request: Request) {
   const providers: AiProvider[] = Array.isArray(body.providers) ? [...new Set(body.providers.filter(isAiProvider))] as AiProvider[] : [];
   if (ids.length === 0 || ids.length > 100) return NextResponse.json({ error: "prescreeningIds: 1-100 ids required" }, { status: 400 });
   if (providers.length === 0) return NextResponse.json({ error: "providers: claude and/or openai required" }, { status: 400 });
+  const instructions = typeof body.instructions === "string" && body.instructions.trim() ? body.instructions.trim().slice(0, 2000) : null;
 
   const db = await getDb();
   const existing = await db.select({ id: prescreenings.id }).from(prescreenings).where(inArray(prescreenings.id, ids)).all();
@@ -64,9 +65,10 @@ export async function POST(request: Request) {
     if (!validIds.has(id)) continue;
     for (const provider of providers) {
       if (pendingKeys.has(`${id}:${provider}`)) continue;
-      rows.push({ prescreeningId: id, provider, status: "queued", requestedAt: now });
+      rows.push({ prescreeningId: id, provider, status: "queued", instructions, requestedAt: now });
     }
   }
-  if (rows.length > 0) await db.insert(aiJobs).values(rows).run();
+  // D1 caps bound parameters per statement, so insert in small batches.
+  for (let i = 0; i < rows.length; i += 10) await db.insert(aiJobs).values(rows.slice(i, i + 10)).run();
   return NextResponse.json({ queued: rows.length, skipped: ids.length * providers.length - rows.length });
 }

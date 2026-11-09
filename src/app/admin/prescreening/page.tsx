@@ -114,6 +114,8 @@ function looksYearly(monthly: number | undefined | null) {
 
 type AiJob = {
   id: number
+  prescreeningId: number
+  instructions?: string | null
   provider: "claude" | "openai"
   model: string | null
   status: "queued" | "running" | "done" | "error"
@@ -433,6 +435,29 @@ export default function PrescreeningPage() {
   const [aiRunner, setAiRunner] = useState<AiRunnerStatus | null>(null)
   const [aiQueueing, setAiQueueing] = useState(false)
   const [aiQueueError, setAiQueueError] = useState("")
+  const [aiFeedback, setAiFeedback] = useState("")
+  const [allAiJobs, setAllAiJobs] = useState<AiJob[]>([])
+  const [bulkSkipAnalyzed, setBulkSkipAnalyzed] = useState(true)
+  const [bulkQueueing, setBulkQueueing] = useState(false)
+  const [bulkMessage, setBulkMessage] = useState("")
+
+  async function loadAllAiJobs() {
+    try {
+      const res = await fetch("/api/ai-jobs")
+      if (!res.ok) return
+      const data = await res.json()
+      setAllAiJobs(Array.isArray(data.jobs) ? data.jobs : [])
+      if (data.runner) setAiRunner(data.runner)
+    } catch {}
+  }
+
+  useEffect(() => { loadAllAiJobs() }, [])
+  const hasPendingAiJobs = allAiJobs.some((j) => j.status === "queued" || j.status === "running")
+  useEffect(() => {
+    if (!hasPendingAiJobs) return
+    const timer = setInterval(loadAllAiJobs, 5000)
+    return () => clearInterval(timer)
+  }, [hasPendingAiJobs])
 
   const aiDialogPrescreeningId = aiDialogOpen ? selected?.id : undefined
   useEffect(() => {
@@ -449,6 +474,7 @@ export default function PrescreeningPage() {
     }
     setAiJobsList([])
     setAiQueueError("")
+    setAiFeedback("")
     poll()
     const timer = setInterval(poll, 4000)
     return () => { cancelled = true; clearInterval(timer) }
@@ -462,7 +488,7 @@ export default function PrescreeningPage() {
       const res = await fetch("/api/ai-jobs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prescreeningIds: [selected.id], providers }),
+        body: JSON.stringify({ prescreeningIds: [selected.id], providers, instructions: aiFeedback.trim() || undefined }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error || "Failed to queue")
@@ -470,6 +496,8 @@ export default function PrescreeningPage() {
       const list = await fetch(`/api/ai-jobs?prescreeningId=${selected.id}`).then((r) => r.json())
       setAiJobsList(Array.isArray(list.jobs) ? list.jobs : [])
       if (list.runner) setAiRunner(list.runner)
+      if (data.queued > 0) setAiFeedback("")
+      loadAllAiJobs()
     } catch (err) {
       setAiQueueError(err instanceof Error ? err.message : "Failed to queue")
     } finally {
@@ -905,6 +933,64 @@ export default function PrescreeningPage() {
       return sortDir === "asc" ? cmp : -cmp
     })
 
+  // Latest AI job per application (jobs arrive newest first).
+  const latestAiJob = new Map<number, AiJob>()
+  for (const j of allAiJobs) if (!latestAiJob.has(j.prescreeningId)) latestAiJob.set(j.prescreeningId, j)
+
+  function isAnalyzed(r: PrescreeningRecord) {
+    const job = latestAiJob.get(Number(r.id))
+    return Boolean(r.aiAnalysisDate) || job?.status === "done"
+  }
+
+  async function queueBulkAi(providers: AiJob["provider"][]) {
+    const targets = visibleRecords.filter((r) => !bulkSkipAnalyzed || !isAnalyzed(r))
+    if (targets.length === 0) {
+      setBulkMessage("Nothing to analyze — every visible application already has an analysis.")
+      return
+    }
+    const label = providers.map((p) => AI_PROVIDER_LABEL[p]).join(" + ")
+    if (!confirm(`Queue ${targets.length} application(s) for ${label}? Each one uses your subscription quota.`)) return
+    setBulkQueueing(true)
+    setBulkMessage("")
+    try {
+      let queued = 0
+      let skipped = 0
+      const ids = targets.map((r) => Number(r.id))
+      for (let i = 0; i < ids.length; i += 100) {
+        const res = await fetch("/api/ai-jobs", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prescreeningIds: ids.slice(i, i + 100), providers }),
+        })
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error(data.error || "Failed to queue")
+        queued += data.queued ?? 0
+        skipped += data.skipped ?? 0
+      }
+      setBulkMessage(`Queued ${queued} job(s)${skipped ? `, ${skipped} already in queue` : ""}. Results show up as “AI ready” in the list.`)
+      loadAllAiJobs()
+    } catch (err) {
+      setBulkMessage(err instanceof Error ? err.message : "Failed to queue")
+    } finally {
+      setBulkQueueing(false)
+    }
+  }
+
+  function aiRowBadge(r: PrescreeningRecord) {
+    const job = latestAiJob.get(Number(r.id))
+    if (!job) return null
+    const label = AI_PROVIDER_LABEL[job.provider] ?? job.provider
+    if (job.status === "queued") return <Badge variant="secondary" className="gap-1" title={`${label} queued`}><Sparkles className="size-3" />AI queued</Badge>
+    if (job.status === "running") return <Badge variant="secondary" className="gap-1 animate-pulse" title={`${label} running`}><Sparkles className="size-3" />AI running</Badge>
+    if (job.status === "error") return <Badge variant="destructive" className="gap-1" title={job.error ?? ""}><Sparkles className="size-3" />AI failed</Badge>
+    // Done: only flag it while it is newer than what was saved to the application.
+    const saved = typeof r.aiAnalysisDate === "string" ? r.aiAnalysisDate : ""
+    if (job.completedAt && job.completedAt > saved) {
+      return <Badge className="gap-1 bg-violet-600 text-white hover:bg-violet-600" title={`${label} result waiting for review`}><Sparkles className="size-3" />AI ready</Badge>
+    }
+    return null
+  }
+
   function sortableHead(column: SortKey, label: string, className?: string) {
     const active = sortKey === column
     const Icon = !active ? ArrowUpDown : sortDir === "asc" ? ArrowUp : ArrowDown
@@ -1046,6 +1132,31 @@ export default function PrescreeningPage() {
             </Button>
           )}
         </div>
+        <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-violet-200 bg-violet-50/40 p-3 dark:border-violet-900 dark:bg-violet-950/20">
+          <span className="flex items-center gap-1.5 text-sm font-medium">
+            <BrainCircuit className="size-4 text-violet-600" />
+            Bulk AI · {visibleRecords.filter((r) => !bulkSkipAnalyzed || !isAnalyzed(r)).length} of {visibleRecords.length} shown
+          </span>
+          <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <input type="checkbox" checked={bulkSkipAnalyzed} onChange={(e) => setBulkSkipAnalyzed(e.target.checked)} />
+            Skip already analyzed
+          </label>
+          <div className="flex flex-wrap gap-2">
+            {(["claude", "openai"] as const).map((p) => (
+              <Button key={p} size="sm" variant="outline" className="h-8 gap-1" disabled={bulkQueueing} onClick={() => queueBulkAi([p])}>
+                <Sparkles className="size-3" /> {AI_PROVIDER_LABEL[p]}
+              </Button>
+            ))}
+            <Button size="sm" className="h-8 gap-1" disabled={bulkQueueing} onClick={() => queueBulkAi(["claude", "openai"])}>
+              <Sparkles className="size-3" /> Both
+            </Button>
+          </div>
+          <span className="text-xs text-muted-foreground">
+            {aiRunner?.online ? "Runner online" : "Runner offline — jobs wait in queue"}
+            {hasPendingAiJobs && ` · ${allAiJobs.filter((j) => j.status === "queued" || j.status === "running").length} in progress`}
+          </span>
+          {bulkMessage && <p className="w-full text-xs text-muted-foreground">{bulkMessage}</p>}
+        </div>
         <div className="rounded-xl border bg-card">
           <Table>
             <TableHeader>
@@ -1076,6 +1187,7 @@ export default function PrescreeningPage() {
                     <TableCell className="font-medium">
                       <div className="flex flex-wrap items-center gap-2">
                         <span>{getName(r)}</span>
+                        {aiRowBadge(r)}
                         {petWarning && (
                           <Badge
                             variant="secondary"
@@ -1483,6 +1595,18 @@ export default function PrescreeningPage() {
                       <Sparkles className="size-3" /> Both
                     </Button>
                   </div>
+                  {aiJobsList.some((j) => j.status === "done") && (
+                    <div className="mt-3">
+                      <Label className="text-xs">Not happy with the result? Tell the AI what to reconsider (optional), then run again</Label>
+                      <Textarea
+                        rows={2}
+                        className="mt-1 text-sm"
+                        value={aiFeedback}
+                        onChange={(e) => setAiFeedback(e.target.value)}
+                        placeholder="e.g. Income was corrected to monthly; the dog is under the weight limit; be stricter on rental history"
+                      />
+                    </div>
+                  )}
                   {aiQueueError && <p className="mt-2 text-sm text-destructive">{aiQueueError}</p>}
                   {aiJobsList.length > 0 && (
                     <ul className="mt-3 space-y-1.5">
@@ -1493,6 +1617,7 @@ export default function PrescreeningPage() {
                             {job.status === "queued" ? "Queued" : job.status === "running" ? "Running…" : job.status === "done" ? "Done" : "Failed"}
                           </Badge>
                           {job.model && <span className="text-xs text-muted-foreground">{job.model}</span>}
+                          {job.instructions && <span className="text-xs text-violet-700 dark:text-violet-300" title={job.instructions}>re-analysis</span>}
                           <span className="text-xs text-muted-foreground">{formatDate(job.completedAt || job.requestedAt)}</span>
                           {job.status === "done" && job.result && (
                             <Button size="sm" variant="outline" className="ml-auto h-7" onClick={() => handleAiPasteChange(job.result as string)}>
@@ -1647,9 +1772,14 @@ export default function PrescreeningPage() {
           <DialogFooter className="sm:justify-between">
             <div>
               {aiStep === "review" && (
-                <Button variant="ghost" onClick={() => setAiStep("input")}>
-                  Back
-                </Button>
+                <div className="flex gap-2">
+                  <Button variant="ghost" onClick={() => setAiStep("input")}>
+                    Back
+                  </Button>
+                  <Button variant="outline" className="gap-1" onClick={() => setAiStep("input")} title="Go back, add feedback and run the analysis again">
+                    <Sparkles className="size-3" /> Re-analyze
+                  </Button>
+                </div>
               )}
             </div>
             <div className="flex gap-2">

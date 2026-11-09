@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { and, asc, eq, inArray, lt } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, lt } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { aiJobs, aiRunnerHeartbeat, prescreenings, properties } from "@/db/schema";
 import { AI_JOB_STALE_MS, AI_PROVIDERS, isAiProvider, isRunnerAuthorized } from "@/lib/ai-runner";
@@ -70,11 +70,27 @@ export async function GET(request: Request) {
       ? await db.select().from(properties).where(eq(properties.id, applicant.propertyId)).get()
       : null;
 
-    const prompt = generatePrescreeningPrompt({
+    let prompt = generatePrescreeningPrompt({
       applicant: applicant as unknown as Record<string, unknown>,
       property: (property ?? null) as unknown as Record<string, unknown> | null,
       computed: typeof applicant.score === "number" ? { score: applicant.score, flags: [], incomeThreshold: 0 } : undefined,
     });
+
+    // Re-analysis: show the model its earlier answer and the admin's feedback.
+    // The feedback comes from the logged-in admin, so it is trusted (unlike applicant text).
+    if (claimed.instructions) {
+      const previous = await db
+        .select({ result: aiJobs.result, provider: aiJobs.provider })
+        .from(aiJobs)
+        .where(and(eq(aiJobs.prescreeningId, claimed.prescreeningId), eq(aiJobs.status, "done"), lt(aiJobs.id, claimed.id)))
+        .orderBy(desc(aiJobs.id))
+        .get();
+      prompt += "\n\n---\nRE-ANALYSIS REQUEST FROM THE PROPERTY MANAGER (trusted):\n" + claimed.instructions;
+      if (previous?.result) {
+        prompt += "\n\nThe previous analysis, which the property manager was not satisfied with:\n" + previous.result;
+      }
+      prompt += "\n\nRe-evaluate the applicant with this feedback in mind and return a complete new JSON object in the same format.";
+    }
 
     return NextResponse.json({
       job: { id: claimed.id, provider: claimed.provider, prescreeningId: claimed.prescreeningId, attempt: claimed.attempts },
