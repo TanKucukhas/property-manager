@@ -32,7 +32,7 @@ npm run cf:d1:backup     # Export D1 before migrations
 - Next.js 16 App Router, all pages in `src/app/`
 - Schema: `src/db/schema.ts` (Drizzle ORM, SQLite/D1)
 - Auth: JWT in HTTP-only cookies (`src/lib/auth.ts`)
-- Email: Brevo API (`src/lib/mailer.ts`)
+- Email: Cloudflare Email Service via the `EMAIL` send_email binding (`src/lib/mailer.ts`); sender hello@cresiq.com. Needs wrangler ≥ 4.15x for `wrangler email` commands
 - Scoring: `src/lib/validations.ts` — system score 0-80, admin rating 0-10 (×2)
 - AI rating: `src/lib/ai-prescreening-prompt.ts` — generates prompt for Claude/ChatGPT
 - AI runner: admin queues `ai_jobs` (`/api/ai-jobs`); `ai-runner/runner.mjs` on the Mac (launchd) polls `/api/ai-runner/jobs/next` with Bearer `AI_RUNNER_TOKEN` (Worker secret) and runs Claude Code / Codex CLI on subscription auth. Results are reviewed manually, never auto-applied. See `ai-runner/README.md`

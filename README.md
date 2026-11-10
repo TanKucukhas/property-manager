@@ -65,7 +65,7 @@ D1 database: `property-manager-db` (ID: `0d011bf5-d02e-4bbf-8ca3-92beb4740206`)
 | Variable | Where | Purpose |
 |----------|-------|---------|
 | `JWT_SECRET` | `.env` / Cloudflare secrets | Auth token signing |
-| `BREVO_API_KEY` | `.env` / Cloudflare secrets | Email sending |
+| `EMAIL` binding | `wrangler.jsonc` (`send_email`) | Email sending via Cloudflare Email Service (cresiq.com onboarded) |
 
 ## Project Structure
 

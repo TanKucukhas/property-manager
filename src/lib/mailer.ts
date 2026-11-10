@@ -1,5 +1,3 @@
-const BREVO_API_URL = "https://api.brevo.com/v3/smtp/email";
-
 interface SendEmailParams {
   to: { email: string; name?: string }[];
   subject: string;
@@ -8,51 +6,72 @@ interface SendEmailParams {
   senderEmail?: string;
 }
 
+/** Minimal shape of the Cloudflare `send_email` binding (wrangler.jsonc → EMAIL). */
+interface SendEmailBinding {
+  send(message: {
+    to: string | string[];
+    from: { email: string; name?: string };
+    subject: string;
+    html: string;
+    text: string;
+  }): Promise<{ messageId: string }>;
+}
+
+function htmlToText(html: string): string {
+  return html
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<(br|\/p|\/div|\/h[1-6]|\/tr|\/li)[^>]*>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&#39;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n\s*\n+/g, "\n\n")
+    .trim();
+}
+
+/**
+ * Sends a transactional email through Cloudflare Email Service (Workers
+ * `send_email` binding; cresiq.com is onboarded for sending). Returns
+ * `{ messageId }`, or `null` when sending is unavailable or fails — callers
+ * must never let email failure break the request.
+ */
 export async function sendEmail({
   to,
   subject,
   htmlContent,
   senderName = "CresIQ Property Manager",
   senderEmail = "hello@cresiq.com",
-}: SendEmailParams) {
-  let apiKey = process.env.BREVO_API_KEY;
-  if (!apiKey) {
-    try {
-      const { getCloudflareContext } = await import("@opennextjs/cloudflare");
-      const { env } = await getCloudflareContext();
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      apiKey = (env as any).BREVO_API_KEY;
-    } catch {
-      // local dev
-    }
+}: SendEmailParams): Promise<{ messageId: string } | null> {
+  let binding: SendEmailBinding | undefined;
+  try {
+    const { getCloudflareContext } = await import("@opennextjs/cloudflare");
+    const { env } = await getCloudflareContext({ async: true });
+    binding = (env as unknown as { EMAIL?: SendEmailBinding }).EMAIL;
+  } catch {
+    // Outside the Workers runtime (plain `next dev`).
   }
-  if (!apiKey) {
-    console.warn("BREVO_API_KEY not set, skipping email");
+  if (!binding) {
+    console.warn(`EMAIL binding not available, skipping email "${subject}"`);
     return null;
   }
 
-  const res = await fetch(BREVO_API_URL, {
-    method: "POST",
-    headers: {
-      "accept": "application/json",
-      "content-type": "application/json",
-      "api-key": apiKey,
-    },
-    body: JSON.stringify({
-      sender: { name: senderName, email: senderEmail },
-      to,
+  try {
+    return await binding.send({
+      to: to.map((r) => r.email),
+      from: { email: senderEmail, name: senderName },
       subject,
-      htmlContent,
-    }),
-  });
-
-  if (!res.ok) {
-    const err = await res.text();
-    console.error("Brevo email failed:", err);
+      html: htmlContent,
+      text: htmlToText(htmlContent),
+    });
+  } catch (e) {
+    const err = e as { code?: string; message?: string };
+    console.error(`Email send failed (${err.code ?? "unknown"}): ${err.message ?? String(e)}`);
     return null;
   }
-
-  return res.json();
 }
 
 // Build a summary of the applicant's submission for their records

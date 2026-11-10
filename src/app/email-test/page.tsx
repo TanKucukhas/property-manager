@@ -27,7 +27,7 @@ export default function EmailTestPage() {
           uid: data.uid || "—",
           success: data.success,
           detail: data.success
-            ? `Brevo messageId: ${data.result?.messageId || "ok"}`
+            ? `messageId: ${data.result?.messageId || "ok"}`
             : `Error: ${data.error || res.statusText}`,
         },
         ...prev,
@@ -51,7 +51,7 @@ export default function EmailTestPage() {
     <div className="mx-auto max-w-2xl px-4 py-12">
       <h1 className="text-3xl font-bold">Email Test</h1>
       <p className="mt-2 text-muted-foreground">
-        Sends a test email to tankucukhas@gmail.com via Brevo and logs the result.
+        Sends a test email to tankucukhas@gmail.com via Cloudflare Email Service and logs the result.
       </p>
 
       <Button onClick={sendTest} disabled={sending} className="mt-6 h-12 px-8 text-lg">
