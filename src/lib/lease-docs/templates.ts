@@ -548,7 +548,7 @@ function renderPet(data: LeaseData): string {
   return `${header("Pet Addendum", data, tenantNames)}
     <p>This Addendum is incorporated into and made part of the Residential Lease Agreement for the Premises. It does not apply to assistance animals, which are handled under applicable fair housing law.</p>
     <h3>1. Approved pets</h3>
-    <table class="grid"><thead><tr><th>Species</th><th>Breed</th><th>Weight</th><th>Age</th></tr></thead><tbody>${rows}</tbody></table>
+    <table class="lease-table"><thead><tr><th>Species</th><th>Breed</th><th>Weight</th><th>Age</th></tr></thead><tbody>${rows}</tbody></table>
     <h3>2. Fees</h3>
     <p>Non-refundable pet fee: ${money(data.petFee)}, due at move-in. Monthly pet rent: ${money(data.petRent)}, due with rent.</p>
     <h3>3. Rules</h3>
@@ -587,7 +587,7 @@ function renderChecklist(data: LeaseData): string {
     <p class="subtitle">${v(data.propertyAddress)} &nbsp;|&nbsp; Tenant: ${v(tenantNames)}</p>
     <p>Move-in date: ____________________ &nbsp;&nbsp; Move-out date: ____________________</p>
     <p>Completed at the move-in walkthrough, not at lease signing. Record condition, existing damage and photo references. Mark items that are not present or not applicable. Do not sign for an inspection or delivery that has not happened.</p>
-    <table class="grid checklist"><thead><tr><th>Area or item</th><th>Move-in condition / photo</th><th>Move-out condition / photo</th></tr></thead>
+    <table class="lease-table checklist"><thead><tr><th>Area or item</th><th>Move-in condition / photo</th><th>Move-out condition / photo</th></tr></thead>
     <tbody>${CHECKLIST_ROWS.map((r) => `<tr><td>${esc(r)}</td><td></td><td></td></tr>`).join("")}</tbody></table>
     <p>Outstanding repairs / photo references: ______________________________________________</p>
     <p>Additional notes: ______________________________________________</p>

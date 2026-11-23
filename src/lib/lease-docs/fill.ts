@@ -69,12 +69,14 @@ export const LEASE_DOC_CSS = `
 .lease-doc { background:#fff; color:#1a1a1a; font-family: Georgia, "Times New Roman", serif; font-size:14px; line-height:1.5; }
 .lease-doc .doc { padding: 40px 48px; }
 .lease-doc .doc + .doc { border-top: 6px solid #f1f1f1; }
+.lease-doc h1, .lease-doc h2, .lease-doc h3, .lease-doc th, .lease-doc b { font-weight:700; }
 .lease-doc h1 { font-size:22px; margin:0 0 4px; text-align:center; letter-spacing:.02em; }
 .lease-doc .subtitle { text-align:center; margin:0 0 16px; color:#444; }
 .lease-doc h2 { font-size:15px; text-transform:uppercase; letter-spacing:.06em; margin:24px 0 8px; border-bottom:1px solid #ccc; padding-bottom:4px; }
 .lease-doc h3 { font-size:14px; margin:16px 0 4px; }
 .lease-doc p { margin:0 0 8px; }
-.lease-doc ul { margin:0 0 8px 20px; padding:0; }
+.lease-doc ul { margin:0 0 8px 20px; padding:0; list-style:disc outside; }
+.lease-doc li { margin:0 0 2px; }
 .lease-doc .kv { margin:0 0 4px; }
 .lease-doc .missing { background:#fff3c4; color:#8a5a00; padding:0 4px; border-radius:2px; }
 .lease-doc .warning { border:1px solid #333; padding:8px 10px; }
@@ -92,11 +94,13 @@ export const LEASE_DOC_CSS = `
 .lease-doc .sig-img small { font-size:9px; color:#666; font-family: Arial, sans-serif; }
 .lease-doc .ack { display:flex; gap:8px; align-items:flex-end; }
 .lease-doc .ack-init { flex:none; }
-.lease-doc table.grid { width:100%; border-collapse:collapse; margin:8px 0 12px; font-size:13px; }
-.lease-doc table.grid th, .lease-doc table.grid td { border:1px solid #999; padding:6px 8px; text-align:left; vertical-align:top; }
+/* display:table — the class name "grid" in older snapshots collides with Tailwind's .grid utility. */
+.lease-doc table.lease-table, .lease-doc table.grid { display:table; width:100%; border-collapse:collapse; margin:8px 0 12px; font-size:13px; }
+.lease-doc table.lease-table th, .lease-doc table.lease-table td, .lease-doc table.grid th, .lease-doc table.grid td { border:1px solid #999; padding:6px 8px; text-align:left; vertical-align:top; }
 .lease-doc table.checklist td { height:34px; }
+.lease-doc table.checklist td:first-child { width:34%; }
 .lease-doc .audit { font-family: Arial, sans-serif; font-size:12px; }
-.lease-doc .audit td, .lease-doc .audit th { font-size:11px; word-break:break-all; }
+.lease-doc .audit td, .lease-doc .audit th { font-size:11px; overflow-wrap:anywhere; }
 @media (max-width: 640px) { .lease-doc .doc { padding: 24px 16px; } .lease-doc .doc-meta { grid-template-columns:1fr; } }
 @media print {
   @page { size: letter; margin: 0.6in; }
@@ -142,7 +146,7 @@ export function auditHtml(a: AuditInfo): string {
     <p class="subtitle">${esc(a.title)}</p>
     <p><b>Document fingerprint (SHA-256 of the text sent for signature):</b><br>${esc(a.contentHash ?? "—")}</p>
     <p><b>Sent:</b> ${esc(ts(a.sentAt))} &nbsp; <b>Completed:</b> ${esc(ts(a.completedAt))}</p>
-    <table class="grid"><thead><tr><th>Signer</th><th>Status</th><th>Timeline (Eastern)</th><th>Device</th><th>Signature record (SHA-256)</th></tr></thead><tbody>${rows}</tbody></table>
+    <table class="lease-table"><thead><tr><th>Signer</th><th>Status</th><th>Timeline (Eastern)</th><th>Device</th><th>Signature record (SHA-256)</th></tr></thead><tbody>${rows}</tbody></table>
     <p class="note">Each signer reviewed the documents through a private link, agreed to use electronic records and signatures, confirmed each acknowledgment, adopted initials, and drew a signature. The document text was frozen when sent; the fingerprint above identifies that exact text. Electronic signatures are valid under the federal ESIGN Act and Ohio’s Uniform Electronic Transactions Act (R.C. Chapter 1306).</p>
   </section>`;
 }
