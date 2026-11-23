@@ -19,6 +19,10 @@ export const statusColors: Record<string, { variant: "default" | "secondary" | "
   "tenant-accepted": { variant: "secondary", className: "bg-emerald-100 text-emerald-800" },
   "credit-check-sent": { variant: "secondary", className: "bg-orange-100 text-orange-800" },
   approved: { variant: "secondary", className: "bg-green-200 text-green-900" },
+  "lease-draft": { variant: "secondary", className: "bg-sky-100 text-sky-800" },
+  "lease-sent": { variant: "secondary", className: "bg-blue-100 text-blue-800" },
+  "lease-review": { variant: "secondary", className: "bg-violet-100 text-violet-800" },
+  "lease-signed": { variant: "secondary", className: "bg-emerald-200 text-emerald-900" },
 }
 
 export function formatDate(d: string | undefined) {
@@ -96,6 +100,10 @@ export const statusOptions = [
   "tenant-accepted",
   "credit-check-sent",
   "approved",
+  "lease-draft",
+  "lease-sent",
+  "lease-review",
+  "lease-signed",
   "rejected",
 ]
 
@@ -112,6 +120,10 @@ export const statusLabels: Record<string, string> = {
   "tenant-accepted": "Tenant Accepted",
   "credit-check-sent": "Credit Check Sent",
   approved: "Approved",
+  "lease-draft": "Lease Draft",
+  "lease-sent": "Lease Sent",
+  "lease-review": "Lease: Countersign",
+  "lease-signed": "Lease Signed",
   rejected: "Rejected",
 }
 

@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { prescreenings, propertyListings } from "@/db/schema";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -31,7 +31,7 @@ export async function ensureOpenListing(db: Db, propertyId: number) {
 
 /**
  * Closes the open listing round. If exactly one applicant in that round is
- * "approved", they are recorded as the placed applicant.
+ * "approved" (or has a signed lease), they are recorded as the placed applicant.
  */
 export async function closeOpenListing(db: Db, propertyId: number) {
   const open = await getOpenListing(db, propertyId);
@@ -42,7 +42,7 @@ export async function closeOpenListing(db: Db, propertyId: number) {
     const approved = await db
       .select({ id: prescreenings.id })
       .from(prescreenings)
-      .where(and(eq(prescreenings.listingId, open.id), eq(prescreenings.status, "approved")))
+      .where(and(eq(prescreenings.listingId, open.id), inArray(prescreenings.status, ["approved", "lease-signed"])))
       .all();
     if (approved.length === 1) placedPrescreeningId = approved[0].id;
   }

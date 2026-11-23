@@ -2,13 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { Button } from "@/components/ui/button"
+import { Button, buttonVariants } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import {
-  AlertTriangle, Check, ChevronLeft, ChevronRight, CircleDashed, ExternalLink, Loader2, RotateCcw, Sparkles, ThumbsDown, ThumbsUp, X,
+  AlertTriangle, Check, ChevronLeft, ChevronRight, CircleDashed, ExternalLink, FileSignature, Loader2, RotateCcw, Sparkles, ThumbsDown, ThumbsUp, X,
 } from "lucide-react"
 import {
   formatCurrency, formatDate, getName, getPetWarning, listingName, looksYearly, statusLabels,
@@ -120,9 +120,20 @@ export default function DecidePage() {
   const [stage, setStage] = useState<Stage>("review")
   const [currentId, setCurrentId] = useState<number | null>(null)
   const [message, setMessage] = useState("")
+  const [leases, setLeases] = useState<Map<number, { id: number; status: string }>>(new Map())
 
   const load = useCallback(async () => {
-    const [r, p, j] = await Promise.all([fetch("/api/prescreening"), fetch("/api/properties"), fetch("/api/ai-jobs")])
+    const [r, p, j, l] = await Promise.all([fetch("/api/prescreening"), fetch("/api/properties"), fetch("/api/ai-jobs"), fetch("/api/lease-packets")])
+    if (l.ok) {
+      const data: { id: number; status: string; prescreeningId: number | null }[] = await l.json()
+      // Newest first from the API; the first live packet per applicant wins.
+      const map = new Map<number, { id: number; status: string }>()
+      for (const x of data) {
+        if (!x.prescreeningId || x.status === "void" || map.has(x.prescreeningId)) continue
+        map.set(x.prescreeningId, { id: x.id, status: x.status })
+      }
+      setLeases(map)
+    }
     if (r.ok) {
       const data = await r.json()
       setRecords(Array.isArray(data) ? data : data.data || [])
@@ -308,6 +319,7 @@ export default function DecidePage() {
             onNext={() => go(1)}
             onPatch={patch}
             onQueueAi={queueAi}
+            lease={leases.get(current.id) ?? null}
           />
         ) : (
           <div className="rounded-lg border p-10 text-center text-muted-foreground">
@@ -319,7 +331,7 @@ export default function DecidePage() {
   )
 }
 
-function Applicant({ r, stage, property, jobs, prior, position, onPrev, onNext, onPatch, onQueueAi }: {
+function Applicant({ r, stage, property, jobs, prior, position, onPrev, onNext, onPatch, onQueueAi, lease }: {
   r: Rec
   stage: Stage
   property?: Property
@@ -330,6 +342,7 @@ function Applicant({ r, stage, property, jobs, prior, position, onPrev, onNext, 
   onNext: () => void
   onPatch: (r: Rec, body: Record<string, unknown>, done: string) => Promise<void>
   onQueueAi: (r: Rec, providers: string[], instructions: string) => Promise<void>
+  lease: { id: number; status: string } | null
 }) {
   const ai = parseStoredAiAnalysis(r.aiAnalysis) as AiView | null
   const providerList: [string, PrescreeningAIAnalysis & { model?: string | null; completedAt?: string | null }][] =
@@ -567,6 +580,10 @@ function Applicant({ r, stage, property, jobs, prior, position, onPrev, onNext, 
               </div>
             )}
 
+            {stage === "done" && (lease || r.status === "approved") && (
+              <LeaseStep r={r} lease={lease} />
+            )}
+
             {stage === "done" && (
               <div className="flex gap-2">
                 <Button variant="outline" className="flex-1" disabled={saving} onClick={() => run({ adminRating: rating, adminNotes: notes }, "Saved.")}>Save rating & notes</Button>
@@ -682,6 +699,41 @@ function Tile({ label, value, max, sub, tone }: { label: string; value: string; 
       <div className="text-xs text-muted-foreground">{label}</div>
       <div className="text-2xl font-bold tabular-nums">{value}<span className="text-sm font-normal text-muted-foreground">{max}</span></div>
       <div className="truncate text-xs text-muted-foreground" title={sub}>{sub}</div>
+    </div>
+  )
+}
+
+/** Next lease action for an approved applicant: prepare → send → countersign → done. */
+function LeaseStep({ r, lease }: { r: Rec; lease: { id: number; status: string } | null }) {
+  const steps = [
+    { key: "draft", label: "Prepare" },
+    { key: "sent", label: "Tenant signs" },
+    { key: "review", label: "Countersign" },
+    { key: "completed", label: "Signed" },
+  ]
+  const current = !lease ? -1
+    : lease.status === "completed" ? 3
+    : r.status === "lease-review" ? 2
+    : lease.status === "sent" ? 1 : 0
+  const cta = !lease ? "Prepare lease for signing"
+    : current === 0 ? "Finish & send lease"
+    : current === 1 ? "Waiting for tenant — view lease"
+    : current === 2 ? "Review & countersign lease"
+    : "View signed lease"
+  const href = lease ? `/admin/leases/documents/${lease.id}` : `/admin/leases/documents?prescreeningId=${r.id}`
+  return (
+    <div className="space-y-2 rounded-lg border p-3">
+      <div className="text-xs font-semibold text-muted-foreground">Lease</div>
+      <div className="flex flex-wrap gap-1 text-[11px]">
+        {steps.map((s, i) => (
+          <span key={s.key} className={`rounded-full px-2 py-0.5 ${i < current || current === 3 ? "bg-emerald-100 text-emerald-800" : i === current ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
+            {s.label}
+          </span>
+        ))}
+      </div>
+      <Link href={href} className={buttonVariants({ variant: current === 2 || !lease ? "default" : "outline", className: "w-full" })}>
+        <FileSignature className="size-4" /> {cta}
+      </Link>
     </div>
   )
 }

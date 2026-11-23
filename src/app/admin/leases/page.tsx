@@ -12,6 +12,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog"
 import { PlusIcon, PencilIcon, TrashIcon } from "lucide-react"
+import { LeaseTermPicker } from "@/components/lease/lease-term-picker"
 
 interface Lease {
   id: string
@@ -34,6 +35,8 @@ interface Lease {
 interface Property {
   id: string
   name: string
+  monthlyRent?: number
+  securityDeposit?: number
 }
 
 const emptyLease: Omit<Lease, "id"> = {
@@ -222,7 +225,16 @@ export default function LeasesPage() {
               <select
                 className="h-9 w-full rounded-lg border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                 value={form.propertyId}
-                onChange={(e) => updateForm("propertyId", e.target.value)}
+                onChange={(e) => {
+                  // Prefill rent and deposit from the property; keep anything already typed.
+                  const p = properties.find((x) => String(x.id) === e.target.value)
+                  setForm((f) => ({
+                    ...f,
+                    propertyId: e.target.value,
+                    monthlyRent: f.monthlyRent || p?.monthlyRent || 0,
+                    securityDeposit: f.securityDeposit || p?.securityDeposit || 0,
+                  }))
+                }}
               >
                 <option value="">Select property...</option>
                 {properties.map((p) => (
@@ -230,16 +242,12 @@ export default function LeasesPage() {
                 ))}
               </select>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex flex-col gap-2">
-                <Label>Lease Start</Label>
-                <Input type="date" value={form.leaseStart} onChange={(e) => updateForm("leaseStart", e.target.value)} />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label>Lease End</Label>
-                <Input type="date" value={form.leaseEnd} onChange={(e) => updateForm("leaseEnd", e.target.value)} />
-              </div>
-            </div>
+            <LeaseTermPicker
+              key={editing?.id ?? "new"}
+              start={form.leaseStart}
+              end={form.leaseEnd}
+              onChange={(s, e) => setForm((f) => ({ ...f, leaseStart: s, leaseEnd: e }))}
+            />
             <div className="grid grid-cols-2 gap-3">
               <div className="flex flex-col gap-2">
                 <Label>Monthly Rent</Label>

@@ -276,3 +276,56 @@ export const aiRunnerHeartbeat = sqliteTable("ai_runner_heartbeat", {
   providers: text("providers"),
   info: text("info"),
 });
+
+// E-signature lease packets (see migrations/0014_lease_packets.sql).
+export const leasePackets = sqliteTable("lease_packets", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  propertyId: integer("property_id").references(() => properties.id),
+  tenantId: integer("tenant_id").references(() => tenants.id),
+  prescreeningId: integer("prescreening_id").references(() => prescreenings.id),
+  title: text("title").notNull(),
+  status: text("status").notNull().default("draft"), // draft | sent | completed | void
+  data: text("data").notNull(), // JSON LeaseData
+  documents: text("documents").notNull(), // JSON DocKey[]
+  snapshotHtml: text("snapshot_html"),
+  contentHash: text("content_hash"),
+  sentAt: text("sent_at"),
+  completedAt: text("completed_at"),
+  voidedAt: text("voided_at"),
+  createdAt: text("created_at").notNull().$defaultFn(() => new Date().toISOString()),
+  updatedAt: text("updated_at").notNull().$defaultFn(() => new Date().toISOString()),
+});
+
+export const leaseSigners = sqliteTable("lease_signers", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  packetId: integer("packet_id").notNull().references(() => leasePackets.id),
+  role: text("role").notNull(), // tenant | landlord
+  slot: text("slot").notNull(), // tenant1 | tenant2 | landlord
+  name: text("name").notNull(),
+  title: text("title"),
+  email: text("email"),
+  token: text("token").notNull().unique(),
+  status: text("status").notNull().default("pending"), // pending | signed
+  viewedAt: text("viewed_at"),
+  consentAt: text("consent_at"),
+  signedAt: text("signed_at"),
+  signatureImage: text("signature_image"),
+  typedName: text("typed_name"),
+  initials: text("initials"),
+  responses: text("responses"), // JSON
+  ip: text("ip"),
+  userAgent: text("user_agent"),
+  signedHash: text("signed_hash"),
+  createdAt: text("created_at").notNull().$defaultFn(() => new Date().toISOString()),
+});
+
+export const leaseEvents = sqliteTable("lease_events", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  packetId: integer("packet_id").notNull().references(() => leasePackets.id),
+  signerId: integer("signer_id"),
+  event: text("event").notNull(),
+  detail: text("detail"),
+  ip: text("ip"),
+  userAgent: text("user_agent"),
+  createdAt: text("created_at").notNull().$defaultFn(() => new Date().toISOString()),
+});
