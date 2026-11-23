@@ -707,31 +707,30 @@ function Tile({ label, value, max, sub, tone }: { label: string; value: string; 
 function LeaseStep({ r, lease }: { r: Rec; lease: { id: number; status: string } | null }) {
   const steps = [
     { key: "draft", label: "Prepare" },
-    { key: "sent", label: "Tenant signs" },
-    { key: "review", label: "Countersign" },
+    { key: "signing", label: "Signing" },
     { key: "completed", label: "Signed" },
   ]
   const current = !lease ? -1
-    : lease.status === "completed" ? 3
-    : r.status === "lease-review" ? 2
+    : lease.status === "completed" ? 2
     : lease.status === "sent" ? 1 : 0
+  const yourTurn = r.status === "lease-review"
   const cta = !lease ? "Prepare lease for signing"
     : current === 0 ? "Finish & send lease"
-    : current === 1 ? "Waiting for tenant — view lease"
-    : current === 2 ? "Review & countersign lease"
-    : "View signed lease"
+    : current === 2 ? "View signed lease"
+    : yourTurn ? "Landlord signature needed — open lease"
+    : "Waiting for tenant — view lease"
   const href = lease ? `/admin/leases/documents/${lease.id}` : `/admin/leases/documents?prescreeningId=${r.id}`
   return (
     <div className="space-y-2 rounded-lg border p-3">
       <div className="text-xs font-semibold text-muted-foreground">Lease</div>
       <div className="flex flex-wrap gap-1 text-[11px]">
         {steps.map((s, i) => (
-          <span key={s.key} className={`rounded-full px-2 py-0.5 ${i < current || current === 3 ? "bg-emerald-100 text-emerald-800" : i === current ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
+          <span key={s.key} className={`rounded-full px-2 py-0.5 ${i < current || current === 2 ? "bg-emerald-100 text-emerald-800" : i === current ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
             {s.label}
           </span>
         ))}
       </div>
-      <Link href={href} className={buttonVariants({ variant: current === 2 || !lease ? "default" : "outline", className: "w-full" })}>
+      <Link href={href} className={buttonVariants({ variant: yourTurn || !lease ? "default" : "outline", className: "w-full" })}>
         <FileSignature className="size-4" /> {cta}
       </Link>
     </div>

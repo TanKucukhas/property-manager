@@ -287,6 +287,8 @@ export const leasePackets = sqliteTable("lease_packets", {
   status: text("status").notNull().default("draft"), // draft | sent | completed | void
   data: text("data").notNull(), // JSON LeaseData
   documents: text("documents").notNull(), // JSON DocKey[]
+  signOrder: text("sign_order").notNull().default("tenant_first"), // landlord_first | tenant_first
+  tenantDelivery: text("tenant_delivery").notNull().default("email"), // email | in_person
   snapshotHtml: text("snapshot_html"),
   contentHash: text("content_hash"),
   sentAt: text("sent_at"),

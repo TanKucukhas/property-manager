@@ -48,6 +48,8 @@ interface Packet {
   contentHash: string | null
   sentAt: string | null
   completedAt: string | null
+  signOrder: string
+  tenantDelivery: string
 }
 
 interface EventRow { id: number; event: string; detail: string | null; signerId: number | null; ip: string | null; createdAt: string }
@@ -68,7 +70,8 @@ export default function LeasePacketPage() {
   const [title, setTitle] = useState("")
   const [dirty, setDirty] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [emailTenants, setEmailTenants] = useState(true)
+  const [signOrder, setSignOrder] = useState<"landlord_first" | "tenant_first">("landlord_first")
+  const [tenantDelivery, setTenantDelivery] = useState<"email" | "in_person">("email")
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/lease-packets/${id}`, { cache: "no-store" })
@@ -85,6 +88,12 @@ export default function LeasePacketPage() {
   }, [id])
 
   useEffect(() => { load() }, [load])
+  // Signing happens in another tab; refresh when the admin comes back.
+  useEffect(() => {
+    const onFocus = () => { if (!dirty) load() }
+    window.addEventListener("focus", onFocus)
+    return () => window.removeEventListener("focus", onFocus)
+  }, [load, dirty])
 
   const isDraft = packet?.status === "draft"
   const preview = useMemo(() => (isDraft && data ? fillPlaceholders(renderPacket(data, docs), []) : html), [isDraft, data, docs, html])
@@ -136,7 +145,10 @@ export default function LeasePacketPage() {
     if (missing.length) { toast.error(`Missing: ${missing.join(", ")}`); return }
     if (!confirm("Send for signature? The text is frozen once sent — to change terms later you void it and start a new packet.")) return
     if (dirty && !(await save(true))) return
-    await action({ action: "send", emailTenants }, "Sent for signature.")
+    await action(
+      { action: "send", signOrder, tenantDelivery },
+      signOrder === "landlord_first" ? "Ready — sign as landlord now." : "Sent for signature.",
+    )
   }
 
   async function remove() {
@@ -157,6 +169,10 @@ export default function LeasePacketPage() {
   }
 
   if (!packet || !data) return <div className="py-20 text-center text-muted-foreground">Loading…</div>
+
+  const landlordFirst = packet.signOrder === "landlord_first"
+  const landlordPending = signers.find((s) => s.role === "landlord")?.status === "pending"
+  const tenantsDone = signers.some((s) => s.role === "tenant") && signers.filter((s) => s.role === "tenant").every((s) => s.status === "signed")
 
   const audit: AuditInfo | null = packet.status === "completed"
     ? { title: packet.title, contentHash: packet.contentHash, sentAt: packet.sentAt, completedAt: packet.completedAt, signers }
@@ -189,17 +205,26 @@ export default function LeasePacketPage() {
         </div>
       </div>
 
-      {packet.status === "sent" && signers.some((s) => s.role === "tenant") &&
-        signers.filter((s) => s.role === "tenant").every((s) => s.status === "signed") &&
-        signers.find((s) => s.role === "landlord")?.status === "pending" && (
+      {packet.status === "sent" && landlordPending && (landlordFirst || tenantsDone) && (
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-violet-200 bg-violet-50 p-4 text-violet-900 dark:bg-violet-950/30 dark:text-violet-100">
           <div>
-            <div className="font-semibold">Tenant signed — your review</div>
-            <div className="text-sm">Check the tenant’s answers under Signers, then countersign. Completing creates the tenant record and marks the property occupied.</div>
+            <div className="font-semibold">{landlordFirst ? "Landlord signs first" : "Tenant signed — your review"}</div>
+            <div className="text-sm">
+              {landlordFirst
+                ? packet.tenantDelivery === "email"
+                  ? "Sign now. The tenant gets the signing link by email as soon as you’ve signed."
+                  : "Sign now. Then open the tenant’s link (Signers → “Open for in-person signing”) on a phone or tablet with the tenant, or copy it to Steve."
+                : "Check the tenant’s answers under Signers, then countersign. Completing creates the tenant record and marks the property occupied."}
+            </div>
           </div>
           <Button onClick={() => window.open(`/sign/${signers.find((s) => s.role === "landlord")!.token}`, "_blank")}>
-            <PenLine className="size-4" /> Review & countersign
+            <PenLine className="size-4" /> {landlordFirst ? "Sign as landlord" : "Review & countersign"}
           </Button>
+        </div>
+      )}
+      {packet.status === "sent" && landlordFirst && !landlordPending && !tenantsDone && packet.tenantDelivery === "in_person" && (
+        <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900 dark:bg-blue-950/30 dark:text-blue-100">
+          <b>Landlord signed — ready for the tenant.</b> Use “Open for in-person signing” on a phone or tablet with the tenant, or “Copy link” and send it to Steve.
         </div>
       )}
       {packet.status === "completed" && (
@@ -222,12 +247,18 @@ export default function LeasePacketPage() {
               ) : (
                 <div className="flex items-center gap-2 text-sm text-emerald-700"><CheckCircle2 className="size-4" /> Ready to send</div>
               )}
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={emailTenants} onChange={(e) => setEmailTenants(e.target.checked)} />
-                Email the signing link to the tenant(s)
-              </label>
+              <fieldset className="space-y-1 text-sm">
+                <legend className="mb-1 text-xs font-semibold text-muted-foreground">Who signs first</legend>
+                <label className="flex items-center gap-2"><input type="radio" checked={signOrder === "landlord_first"} onChange={() => setSignOrder("landlord_first")} /> Landlord first, then tenant</label>
+                <label className="flex items-center gap-2"><input type="radio" checked={signOrder === "tenant_first"} onChange={() => setSignOrder("tenant_first")} /> Tenant first, landlord countersigns</label>
+              </fieldset>
+              <fieldset className="space-y-1 text-sm">
+                <legend className="mb-1 text-xs font-semibold text-muted-foreground">How the tenant signs</legend>
+                <label className="flex items-center gap-2"><input type="radio" checked={tenantDelivery === "email"} onChange={() => setTenantDelivery("email")} /> Email the link to the tenant</label>
+                <label className="flex items-center gap-2"><input type="radio" checked={tenantDelivery === "in_person"} onChange={() => setTenantDelivery("in_person")} /> In person (Steve opens it on a phone/tablet)</label>
+              </fieldset>
               <Button className="w-full" disabled={busy || missing.length > 0} onClick={send}>
-                {busy ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />} Send for e-signature
+                {busy ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />} {signOrder === "landlord_first" ? "Lock & start signing" : "Send for e-signature"}
               </Button>
               <p className="text-xs text-muted-foreground">Prefer paper? Use “PDF (sign on paper)”, print and sign by hand — no need to send.</p>
             </div>
@@ -261,6 +292,12 @@ export default function LeasePacketPage() {
                     </div>
                     {packet.status === "sent" && s.status !== "signed" && (
                       <div className="mt-2 flex flex-wrap gap-2">
+                        {s.role === "tenant" && landlordFirst && landlordPending && (
+                          <div className="w-full text-xs text-muted-foreground">Waiting for the landlord’s signature first.</div>
+                        )}
+                        {s.role === "tenant" && !(landlordFirst && landlordPending) && (
+                          <Button size="sm" onClick={() => window.open(`/sign/${s.token}`, "_blank")}><PenLine className="size-3" /> Open for in-person signing</Button>
+                        )}
                         <Button size="sm" variant="outline" onClick={() => copyLink(s)}><Copy className="size-3" /> Copy link</Button>
                         {s.email && (
                           <Button size="sm" variant="outline" disabled={busy} onClick={() => action({ action: "email", signerId: s.id }, `Link emailed to ${s.email}`)}>
@@ -388,7 +425,7 @@ function Editor({ data, set, docs, setDocs }: {
         <Field label="Landlord mailing address">{text("landlordAddress")}</Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Landlord email">{text("landlordEmail")}</Field>
-          <Field label="Maintenance contact">{text("maintenanceContact")}</Field>
+          <Field label="Property manager (maint. & rent)">{text("maintenanceContact")}</Field>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Landlord signer name">{text("landlordSignerName", { placeholder: "Who signs for the LLC" })}</Field>

@@ -122,7 +122,7 @@ export const statusLabels: Record<string, string> = {
   approved: "Approved",
   "lease-draft": "Lease Draft",
   "lease-sent": "Lease Sent",
-  "lease-review": "Lease: Countersign",
+  "lease-review": "Lease: Landlord to Sign",
   "lease-signed": "Lease Signed",
   rejected: "Rejected",
 }

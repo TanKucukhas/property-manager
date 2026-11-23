@@ -16,7 +16,7 @@ const LANDLORD: { key: TextKey; label: string; hint?: string }[] = [
   { key: "landlordName", label: "Landlord (legal owner)" },
   { key: "landlordAddress", label: "Mailing address for notices" },
   { key: "landlordEmail", label: "Email for routine correspondence" },
-  { key: "maintenanceContact", label: "Maintenance contact" },
+  { key: "maintenanceContact", label: "Property manager (maintenance & rent collection)" },
   { key: "landlordSignerName", label: "Who signs for the landlord", hint: "Leave empty to choose per lease" },
   { key: "landlordSignerTitle", label: "Signer title" },
   { key: "landlordSignerEmail", label: "Signer email", hint: "Gets the “tenant signed — countersign” email" },

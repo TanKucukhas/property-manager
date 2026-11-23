@@ -271,13 +271,27 @@ function applicantStatusFor(packet: PacketRow | null, signers: SignerRow[]): str
   if (!packet || packet.status === "void") return "approved";
   if (packet.status === "draft") return "lease-draft";
   if (packet.status === "completed") return "lease-signed";
+  return landlordTurn(packet, signers) ? "lease-review" : "lease-sent";
+}
+
+/** True when the landlord is the one who has to sign next. */
+export function landlordTurn(packet: Pick<PacketRow, "signOrder">, signers: SignerRow[]): boolean {
+  const landlord = signers.find((s) => s.role === "landlord");
+  if (!landlord || landlord.status === "signed") return false;
+  if (packet.signOrder === "landlord_first") return true;
   const tenants = signers.filter((s) => s.role === "tenant");
-  return tenants.length && tenants.every((s) => s.status === "signed") ? "lease-review" : "lease-sent";
+  return tenants.length > 0 && tenants.every((s) => s.status === "signed");
+}
+
+/** A tenant can't sign a landlord-first packet until the landlord has. */
+export function tenantBlocked(packet: Pick<PacketRow, "signOrder">, signers: SignerRow[], signer: SignerRow): boolean {
+  if (signer.role !== "tenant" || packet.signOrder !== "landlord_first") return false;
+  return signers.some((s) => s.role === "landlord" && s.status !== "signed");
 }
 
 /**
  * Keeps the linked applicant's status in step with the packet:
- * approved → lease-draft → lease-sent → lease-review (tenants signed, landlord to countersign) → lease-signed.
+ * approved → lease-draft → lease-review (landlord to sign) / lease-sent (waiting for tenant) → lease-signed.
  * Never touches an applicant outside that flow (e.g. rejected).
  */
 export async function syncApplicantStatus(db: Db, prescreeningId: number | null, packet: PacketRow | null) {

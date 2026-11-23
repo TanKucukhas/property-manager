@@ -7,7 +7,7 @@ import { signerFields } from "@/lib/lease-docs/templates";
 import { sha256Hex } from "@/lib/lease-docs/fill";
 import {
   auditSigner, completedEmail, countersignEmail, getSigners, logEvent, onPacketCompleted, packetHtml, parseData, parseDocs, requestMeta,
-  syncApplicantStatus,
+  signingEmail, syncApplicantStatus, tenantBlocked,
 } from "@/lib/lease-docs/server";
 
 // Public: the token in the URL is the signer's credential.
@@ -37,6 +37,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
   const data = parseData(packet.data);
   const docs = parseDocs(packet.documents);
   return NextResponse.json({
+    waitingForLandlord: packet.status === "sent" && tenantBlocked(packet, signers, signer),
     title: packet.title,
     status: packet.status,
     contentHash: packet.contentHash,
@@ -61,6 +62,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
   if (!signer || !packet) return NextResponse.json({ error: "This signing link is not valid." }, { status: 404 });
   if (packet.status !== "sent") return NextResponse.json({ error: packet.status === "void" ? "These documents were cancelled." : "These documents are no longer open for signing." }, { status: 409 });
   if (signer.status === "signed") return NextResponse.json({ error: "You have already signed." }, { status: 409 });
+  if (tenantBlocked(packet, await getSigners(db, packet.id), signer)) {
+    return NextResponse.json({ error: "The landlord signs first. You'll be able to sign once they have." }, { status: 409 });
+  }
 
   const body = await request.json().catch(() => ({}));
   const typedName = String(body.typedName ?? "").trim().slice(0, 120);
@@ -136,6 +140,19 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
   } else {
     await db.update(leasePackets).set({ updatedAt: now }).where(eq(leasePackets.id, packet.id)).run();
     await syncApplicantStatus(db, packet.prescreeningId, packet);
+    // Landlord-first: once the landlord has signed, hand the packet to the tenants.
+    if (signer.role === "landlord" && packet.signOrder === "landlord_first") {
+      const data = parseData(packet.data);
+      for (const t of signers.filter((s) => s.role === "tenant" && s.status !== "signed")) {
+        if (packet.tenantDelivery === "email" && t.email) {
+          const msg = signingEmail({ name: t.name, title: packet.title, address: data.propertyAddress, link: `${origin}/sign/${t.token}`, landlordName: data.landlordName });
+          const res = await sendEmail({ to: [{ email: t.email, name: t.name }], ...msg });
+          await logEvent(db, packet.id, res ? "emailed" : "email_failed", { signerId: t.id, detail: t.email });
+        } else {
+          await logEvent(db, packet.id, "ready_for_tenant", { signerId: t.id, detail: "in person — open the tenant's link on a device" });
+        }
+      }
+    }
     // Last tenant just signed → ask the landlord signer to review and countersign.
     const landlord = signers.find((s) => s.role === "landlord");
     const tenantsDone = signers.filter((s) => s.role === "tenant").every((s) => s.status === "signed");

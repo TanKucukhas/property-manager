@@ -13,6 +13,7 @@ import { DOC_TITLES, type DocKey, type SignerField } from "@/lib/lease-docs/temp
 import type { AuditInfo } from "@/lib/lease-docs/fill"
 
 interface SignView {
+  waitingForLandlord: boolean
   title: string
   status: string
   contentHash: string | null
@@ -124,7 +125,7 @@ export default function SignPage() {
 
   const iSigned = view.signer.status === "signed"
   const completed = view.status === "completed"
-  const canSign = view.status === "sent" && !iSigned
+  const canSign = view.status === "sent" && !iSigned && !view.waitingForLandlord
   const audit: AuditInfo | null = view.audit
     ? { title: view.title, contentHash: view.contentHash, sentAt: view.sentAt, completedAt: view.completedAt, signers: view.audit }
     : null
@@ -155,6 +156,10 @@ export default function SignPage() {
           ) : iSigned ? (
             <Banner tone="green" icon={<CheckCircle2 className="size-5" />} title="Thank you — you have signed">
               Waiting for: {view.signers.filter((s) => s.status !== "signed").map((s) => s.name).join(", ")}. You’ll get an email when everyone has signed.
+            </Banner>
+          ) : view.status === "sent" && view.waitingForLandlord ? (
+            <Banner tone="amber" icon={<AlertTriangle className="size-5" />} title="Not ready to sign yet">
+              {view.landlordName} signs first. You can read the documents now; signing opens as soon as they have signed.
             </Banner>
           ) : view.status === "sent" ? (
             <Banner tone="blue" icon={<FileSignature className="size-5" />} title={`Hi ${view.signer.name}, please review and sign`}>

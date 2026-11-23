@@ -290,8 +290,8 @@ function renderLease(data: LeaseData, docs: DocKey[]): string {
         .map((t) => `${kv("Tenant and signer", v(t.name))}${kv("Tenant email and phone", v([t.email, t.phone].filter(Boolean).join(" · ")))}`)
         .join("")}
       ${kv("Permitted occupants who are not signers", data.occupants.trim() ? esc(data.occupants) : "None")}
-      ${kv("Maintenance contact", v(data.maintenanceContact))}
-      <p>Send written notices to Landlord at the mailing address above. The maintenance contact is listed for maintenance, not for rent collection or service of legal notices. After possession, the Premises is Tenant’s mailing address unless Tenant gives Landlord a different address in writing. Routine coordination may be by email or text. Serve legal notices as required by applicable law.</p>`,
+      ${kv("Property manager (maintenance and rent)", v(data.maintenanceContact))}
+      <p>The property manager handles maintenance requests and rent collection for Landlord. Send written notices to Landlord at the mailing address above. Routine coordination may be by email or text.</p>`,
   });
 
   sections.push({

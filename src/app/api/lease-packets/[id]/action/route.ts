@@ -9,8 +9,10 @@ import { sha256Hex } from "@/lib/lease-docs/fill";
 import { getSigners, logEvent, newToken, parseData, parseDocs, signingEmail, syncApplicantStatus, type SignerRow } from "@/lib/lease-docs/server";
 
 /**
- * POST { action: "send", emailTenants?: boolean, emailLandlord?: boolean }
- *   Freezes the document, creates one signer per tenant plus the landlord, and emails the links.
+ * POST { action: "send", signOrder?: "landlord_first" | "tenant_first", tenantDelivery?: "email" | "in_person", emailLandlord?: boolean }
+ *   Freezes the document and creates one signer per tenant plus the landlord.
+ *   landlord_first: tenants are emailed only after the landlord signs (if delivery is email).
+ *   tenant_first: tenants are emailed now (if delivery is email); the landlord countersigns after.
  * POST { action: "email", signerId }   Re-sends one signer's link.
  * POST { action: "void", reason? }     Cancels a sent packet; the record is kept.
  */
@@ -40,6 +42,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const missing = missingForSend(data, docs);
     if (missing.length) return NextResponse.json({ error: "Missing information", missing }, { status: 400 });
 
+    const signOrder = body.signOrder === "tenant_first" ? "tenant_first" : "landlord_first";
+    const tenantDelivery = body.tenantDelivery === "in_person" ? "in_person" : "email";
     const snapshot = renderPacket(data, docs);
     const hash = await sha256Hex(snapshot);
     const now = new Date().toISOString();
@@ -51,16 +55,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       await db.insert(leaseSigners).values({ ...r, packetId: packet.id, token: newToken(), status: "pending", createdAt: now }).run();
     }
     await db.update(leasePackets)
-      .set({ status: "sent", snapshotHtml: snapshot, contentHash: hash, sentAt: now, updatedAt: now })
+      .set({ status: "sent", snapshotHtml: snapshot, contentHash: hash, sentAt: now, updatedAt: now, signOrder, tenantDelivery })
       .where(eq(leasePackets.id, packet.id))
       .run();
-    await logEvent(db, packet.id, "sent", { detail: `by ${session.email}; sha256 ${hash}`, request });
-    await syncApplicantStatus(db, packet.prescreeningId, { ...packet, status: "sent" });
+    await logEvent(db, packet.id, "sent", { detail: `by ${session.email}; ${signOrder}, tenant ${tenantDelivery}; sha256 ${hash}`, request });
+    await syncApplicantStatus(db, packet.prescreeningId, { ...packet, status: "sent", signOrder, tenantDelivery });
 
     const signers = await getSigners(db, packet.id);
     const emailed: string[] = [];
     for (const s of signers) {
-      const want = s.role === "tenant" ? body.emailTenants !== false : body.emailLandlord === true;
+      const want = s.role === "tenant"
+        ? signOrder === "tenant_first" && tenantDelivery === "email"
+        : body.emailLandlord === true;
       if (want && (await emailSigner(s))) emailed.push(s.name);
     }
     return NextResponse.json({ success: true, emailed, links: signers.map((s) => ({ id: s.id, name: s.name, role: s.role, link: linkFor(s) })) });
