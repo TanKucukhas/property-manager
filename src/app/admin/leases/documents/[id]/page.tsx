@@ -448,8 +448,11 @@ function Editor({ data, set, docs, setDocs }: {
       </Section>
 
       <Section title="Utilities & house rules">
-        <Field label="Landlord pays">{text("landlordUtilities")}</Field>
-        <Field label="Tenant pays">{text("tenantUtilities")}</Field>
+        <p className="text-xs text-muted-foreground">Filled from this house’s terms (Lease Terms). Changes here apply to this lease only.</p>
+        <Field label="Utilities"><Textarea rows={4} value={data.utilitiesTerms} onChange={(e) => set("utilitiesTerms", e.target.value)} /></Field>
+        <Field label="Maintenance"><Textarea rows={5} value={data.maintenanceTerms} onChange={(e) => set("maintenanceTerms", e.target.value)} /></Field>
+        <Field label="Smoking"><Textarea rows={2} value={data.smokingTerms} onChange={(e) => set("smokingTerms", e.target.value)} /></Field>
+        <Field label="Entry & showing notice"><Textarea rows={3} value={data.entryTerms} onChange={(e) => set("entryTerms", e.target.value)} /></Field>
         <Field label="Included appliances">{text("includedAppliances")}</Field>
         <Check checked={data.tenantHandlesYardAndSnow} onChange={(v) => set("tenantHandlesYardAndSnow", v)} label="Tenant handles mowing and snow/ice on the private walk and driveway" />
         <Check checked={data.renterInsuranceRequired} onChange={(v) => set("renterInsuranceRequired", v)} label="Renter’s insurance required (otherwise recommended)" />
@@ -493,7 +496,7 @@ function Editor({ data, set, docs, setDocs }: {
       </Section>
 
       <Section title="Additional terms">
-        <Textarea rows={4} value={data.additionalTerms} onChange={(e) => set("additionalTerms", e.target.value)} placeholder="Anything specific to this tenancy. Leave empty if none." />
+        <Textarea rows={10} value={data.additionalTerms} onChange={(e) => set("additionalTerms", e.target.value)} placeholder="Anything specific to this tenancy. Leave empty if none." />
       </Section>
 
       <Section title="Documents in this packet">

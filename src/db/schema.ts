@@ -329,3 +329,10 @@ export const leaseEvents = sqliteTable("lease_events", {
   userAgent: text("user_agent"),
   createdAt: text("created_at").notNull().$defaultFn(() => new Date().toISOString()),
 });
+
+// App-wide key/value settings (JSON values). See migrations/0015_settings.sql.
+export const settings = sqliteTable("settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: text("updated_at").notNull().$defaultFn(() => new Date().toISOString()),
+});

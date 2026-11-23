@@ -12,6 +12,8 @@
  *   {{RESP:slot:key}}     → a free-text answer
  */
 
+import { DEFAULT_HOUSE_TERMS as H } from "./standard-terms";
+
 export type DocKey = "lease" | "lead" | "smoke" | "mold" | "insurance" | "pet" | "checklist";
 
 export interface LeaseTenant {
@@ -51,8 +53,10 @@ export interface LeaseData {
   firstPaymentNote: string; // optional override, e.g. a prorated first month
   securityDeposit: number;
 
-  landlordUtilities: string;
-  tenantUtilities: string;
+  utilitiesTerms: string;
+  maintenanceTerms: string;
+  smokingTerms: string;
+  entryTerms: string;
   includedAppliances: string;
   tenantHandlesYardAndSnow: boolean;
   renterInsuranceRequired: boolean;
@@ -92,13 +96,13 @@ export const EPA_PAMPHLET_URL = "https://www.epa.gov/lead/protect-your-family-le
 
 export function defaultLeaseData(): LeaseData {
   return {
-    landlordName: "Halberd LLC",
-    landlordAddress: "1116 Fabron Ave, Columbus, OH 43203",
-    landlordEmail: "info@halberd.co",
-    landlordSignerName: "",
-    landlordSignerTitle: "Authorized Manager",
-    landlordSignerEmail: "info@halberd.co",
-    maintenanceContact: "Steve Phipps, 740-821-6206",
+    landlordName: H.landlordName,
+    landlordAddress: H.landlordAddress,
+    landlordEmail: H.landlordEmail,
+    landlordSignerName: H.landlordSignerName,
+    landlordSignerTitle: H.landlordSignerTitle,
+    landlordSignerEmail: H.landlordSignerEmail,
+    maintenanceContact: H.maintenanceContact,
     propertyAddress: "",
     homeType: "single-family home",
     tenants: [{ name: "", email: "", phone: "" }],
@@ -107,12 +111,14 @@ export function defaultLeaseData(): LeaseData {
     leaseEnd: "",
     monthlyRent: 0,
     rentDueDay: 1,
-    paymentMethod: "",
-    lateFeeTerms: "",
+    paymentMethod: H.paymentMethod,
+    lateFeeTerms: H.lateFeeRule,
     firstPaymentNote: "",
     securityDeposit: 0,
-    landlordUtilities: "water, sewer and regular trash service",
-    tenantUtilities: "electricity and, if the home is served by natural gas, gas service",
+    utilitiesTerms: H.utilitiesTerms,
+    maintenanceTerms: H.maintenanceTerms,
+    smokingTerms: H.smokingTerms,
+    entryTerms: H.showingNoticeTerms,
     includedAppliances: "The washer and dryer are included.",
     tenantHandlesYardAndSnow: true,
     renterInsuranceRequired: false,
@@ -120,15 +126,15 @@ export function defaultLeaseData(): LeaseData {
     voucherAgency: "",
     petsApproved: false,
     pets: [],
-    petFee: 300,
-    petRent: 25,
+    petFee: H.petFee,
+    petRent: H.petRent,
     builtBefore1978: true,
     leadKnownHazards: "",
     leadRecords: "",
     agentName: "",
     moldKnownConditions: "",
     smokeKnownIssues: "",
-    additionalTerms: "",
+    additionalTerms: H.specialTerms,
   };
 }
 
@@ -322,13 +328,13 @@ function renderLease(data: LeaseData, docs: DocKey[]): string {
 
   sections.push({
     title: "Utilities and appliances",
-    body: `<p>Landlord pays ${v(data.landlordUtilities)}. Tenant arranges and pays for ${v(data.tenantUtilities)}. Arrange service in Tenant’s name by the date possession begins and keep it active during occupancy. Tenant pays for optional internet and other services Tenant orders. Promptly notify Landlord of service outages, heat loss or suspected leaks. Landlord retains all legal duties for the home and its systems.</p>
+    body: `${paras(data.utilitiesTerms) || `<p>${v("")}</p>`}<p>Landlord retains all legal duties for the home and its systems.</p>
       <p>${data.includedAppliances.trim() ? esc(data.includedAppliances) + " " : ""}Record any other supplied appliances, their condition, and all keys, remotes and access devices on the move-in checklist. Use appliances according to their instructions and report malfunctions rather than attempting repairs.</p>`,
   });
 
   sections.push({
     title: "Smoking, pets and fire safety",
-    body: `<p>No smoking or vaping inside the home. ${
+    body: `${paras(data.smokingTerms)}<p>${
       data.petsApproved
         ? "Only the pets approved in the attached Pet Addendum are permitted; any other pet requires prior written approval."
         : "Pets require prior written approval and a signed addendum."
@@ -353,13 +359,13 @@ function renderLease(data: LeaseData, docs: DocKey[]): string {
   sections.push({
     group: "Repairs, access and move out",
     title: "Maintenance and reporting",
-    body: `<p>Landlord will keep the home fit and habitable, meet applicable housing and safety codes, and maintain required systems and facilities. Tenant will keep the home reasonably clean and safe, dispose of rubbish properly, and use plumbing and electrical fixtures reasonably. Tenant must promptly notify Landlord of leaks, moisture or visible mold, pests, loss of heat, or electrical or safety problems. Call emergency services first where appropriate.</p>
-      <p>Do not authorize work on Landlord’s behalf or make repairs without approval, except as allowed by law. Tenant is responsible for actual damage caused by misuse or negligence, not ordinary wear. Nothing here shifts Landlord’s statutory repair duties or limits a remedy allowed by law.</p>`,
+    body: `${paras(data.maintenanceTerms)}
+      <p>Call emergency services first where appropriate. Nothing here shifts Landlord’s statutory repair duties or limits a remedy allowed by law.</p>`,
   });
 
   sections.push({
     title: "Inspection, repairs and showings",
-    body: `<p>Landlord may enter for lawful purposes at reasonable times and on reasonable notice, including for repairs, inspection, agreed services and showings to prospective purchasers or renters. Ohio law presumes 24 hours is reasonable notice. Emergencies and other exceptions recognized by law are handled accordingly. Landlord must not abuse access or use it to harass Tenant.</p>`,
+    body: `${paras(data.entryTerms)}<p>Landlord must not abuse access or use it to harass Tenant.</p>`,
   });
 
   sections.push({
@@ -401,7 +407,9 @@ function renderLease(data: LeaseData, docs: DocKey[]): string {
   });
 
   if (data.additionalTerms.trim()) {
-    sections.push({ title: "Additional terms", body: paras(data.additionalTerms) });
+    // "Renewal. At the end…" → bold lead-in for each paragraph.
+    const body = paras(data.additionalTerms).replace(/<p>([A-Z][A-Za-z ,&/'’-]{2,48}\.)\s/g, "<p><b>$1</b> ");
+    sections.push({ title: "Additional terms", body });
   }
 
   sections.push({

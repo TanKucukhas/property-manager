@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { ensureHouseTerms } from "@/lib/lease-docs/house-defaults";
 import { getDb } from "@/lib/db";
 import { properties } from "@/db/schema";
 import { propertySchema } from "@/lib/validations";
@@ -27,5 +28,7 @@ export async function POST(request: Request) {
 
   const result = await db.insert(properties).values(parsed.data).returning().get();
   if (result.status === "available") await ensureOpenListing(db, result.id);
+  // Every house starts with a copy of the default lease terms, editable per house.
+  await ensureHouseTerms(db, result.id);
   return NextResponse.json(result);
 }

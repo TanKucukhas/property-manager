@@ -1,6 +1,7 @@
-import { asc, eq } from "drizzle-orm";
-import { leaseEvents, leasePackets, leaseSigners, prescreenings, properties, propertyListings, tenants } from "@/db/schema";
+import { asc, desc, eq } from "drizzle-orm";
+import { leaseEvents, leasePackets, leaseSigners, leaseTerms, prescreenings, properties, propertyListings, tenants } from "@/db/schema";
 import { getOpenListing, syncListingWithStatus } from "@/lib/listings";
+import { getHouseDefaults } from "./house-defaults";
 import { fillPlaceholders, type FillSigner } from "./fill";
 import {
   defaultDocuments, defaultLeaseData, normalizeLeaseData, renderPacket,
@@ -140,6 +141,16 @@ export async function prefillLeaseData(
   src: { prescreeningId?: number; tenantId?: number; propertyId?: number },
 ): Promise<{ data: LeaseData; documents: DocKey[]; propertyId: number | null; title: string }> {
   const data = defaultLeaseData();
+  // Company defaults from the DB (Lease Terms → Default house terms).
+  const hd = await getHouseDefaults(db);
+  Object.assign(data, {
+    landlordName: hd.landlordName, landlordAddress: hd.landlordAddress, landlordEmail: hd.landlordEmail,
+    landlordSignerName: hd.landlordSignerName, landlordSignerTitle: hd.landlordSignerTitle,
+    landlordSignerEmail: hd.landlordSignerEmail, maintenanceContact: hd.maintenanceContact,
+    paymentMethod: hd.paymentMethod, lateFeeTerms: hd.lateFeeRule, petFee: hd.petFee, petRent: hd.petRent,
+    utilitiesTerms: hd.utilitiesTerms, maintenanceTerms: hd.maintenanceTerms, smokingTerms: hd.smokingTerms,
+    entryTerms: hd.showingNoticeTerms, additionalTerms: hd.specialTerms,
+  });
   let propertyId: number | null = src.propertyId ?? null;
 
   if (src.prescreeningId) {
@@ -195,6 +206,21 @@ export async function prefillLeaseData(
       data.propertyAddress = fullAddress(prop);
       if (!data.monthlyRent) data.monthlyRent = prop.monthlyRent;
       if (!data.securityDeposit) data.securityDeposit = prop.securityDeposit;
+    }
+    // This house's own terms (Lease Terms page) override the company defaults.
+    const terms = await db.select().from(leaseTerms).where(eq(leaseTerms.propertyId, propertyId)).orderBy(desc(leaseTerms.updatedAt)).get();
+    if (terms) {
+      const t = (x: string | null) => (x && x.trim() ? x.trim() : null);
+      data.lateFeeTerms = t(terms.lateFeeRule) ?? data.lateFeeTerms;
+      data.additionalTerms = t(terms.specialTerms) ?? data.additionalTerms;
+      data.utilitiesTerms = t(terms.utilitiesTerms) ?? data.utilitiesTerms;
+      data.maintenanceTerms = t(terms.maintenanceTerms) ?? data.maintenanceTerms;
+      data.smokingTerms = t(terms.smokingTerms) ?? data.smokingTerms;
+      data.entryTerms = t(terms.showingNoticeTerms) ?? data.entryTerms;
+      if (terms.petFee) data.petFee = terms.petFee;
+      if (terms.petRent) data.petRent = terms.petRent;
+      if (!data.monthlyRent && terms.monthlyRent) data.monthlyRent = terms.monthlyRent;
+      if (!data.securityDeposit && terms.securityDeposit) data.securityDeposit = terms.securityDeposit;
     }
   }
 

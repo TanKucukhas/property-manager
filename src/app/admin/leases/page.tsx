@@ -13,6 +13,8 @@ import {
 } from "@/components/ui/dialog"
 import { PlusIcon, PencilIcon, TrashIcon } from "lucide-react"
 import { LeaseTermPicker } from "@/components/lease/lease-term-picker"
+import { DEFAULT_HOUSE_TERMS, houseTermsFromDefaults, type HouseDefaults } from "@/lib/lease-docs/standard-terms"
+import Link from "next/link"
 
 interface Lease {
   id: string
@@ -68,13 +70,17 @@ export default function LeasesPage() {
   const [editing, setEditing] = useState<Lease | null>(null)
   const [form, setForm] = useState(emptyLease)
   const [saving, setSaving] = useState(false)
+  const [defaults, setDefaults] = useState<HouseDefaults>(DEFAULT_HOUSE_TERMS)
+  const houseDefaults = houseTermsFromDefaults(defaults)
 
   async function loadData() {
     try {
-      const [lRes, pRes] = await Promise.all([
+      const [lRes, pRes, dRes] = await Promise.all([
         fetch("/api/leases"),
         fetch("/api/properties"),
+        fetch("/api/lease-defaults"),
       ])
+      if (dRes.ok) setDefaults(await dRes.json())
       if (!lRes.ok) throw new Error("Failed to load leases")
       const lData = await lRes.json()
       setLeases(Array.isArray(lData) ? lData : lData.data || [])
@@ -91,9 +97,18 @@ export default function LeasesPage() {
 
   useEffect(() => { loadData() }, [])
 
+  async function applyDefaults() {
+    const res = await fetch("/api/lease-defaults/apply", { method: "POST" })
+    const r = await res.json()
+    if (!res.ok) return alert(r.error || "Failed")
+    alert(r.created ? `Added default terms to ${r.created} house(s).` : "Every house already has terms.")
+    loadData()
+  }
+
   function openAdd() {
     setEditing(null)
-    setForm(emptyLease)
+    // New leases start from our standard terms; everything stays editable.
+    setForm({ ...emptyLease, ...houseDefaults })
     setDialogOpen(true)
   }
 
@@ -162,12 +177,19 @@ export default function LeasesPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Lease Terms</h1>
-        <Button onClick={openAdd}>
-          <PlusIcon className="size-4" />
-          Add Lease
-        </Button>
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">Lease Terms</h1>
+          <p className="text-sm text-muted-foreground">Each house’s own terms. New houses start from the default house terms; new leases are filled from here.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/admin/leases/defaults" className="inline-flex h-9 items-center rounded-lg border px-3 text-sm hover:bg-muted">Default house terms</Link>
+          <Button variant="outline" onClick={applyDefaults}>Add defaults to houses without terms</Button>
+          <Button onClick={openAdd}>
+            <PlusIcon className="size-4" />
+            Add Lease
+          </Button>
+        </div>
       </div>
 
       {leases.length === 0 ? (
@@ -218,6 +240,20 @@ export default function LeasesPage() {
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>{editing ? "Edit Lease" : "Add Lease"}</DialogTitle>
+            <button
+              type="button"
+              className="w-fit text-xs text-primary hover:underline"
+              onClick={() => setForm((f) => {
+                // Fill only empty fields so nothing typed is overwritten.
+                const next = { ...f }
+                for (const [k, v] of Object.entries(houseDefaults) as [keyof typeof houseDefaults, string | number][]) {
+                  if (!next[k]) (next as Record<string, unknown>)[k] = v
+                }
+                return next
+              })}
+            >
+              Fill empty fields with the default house terms
+            </button>
           </DialogHeader>
           <div className="flex flex-col gap-4 max-h-[60vh] overflow-y-auto pr-1">
             <div className="flex flex-col gap-2">
@@ -302,7 +338,7 @@ export default function LeasesPage() {
             </div>
             <div className="flex flex-col gap-2">
               <Label>Special Terms</Label>
-              <Textarea value={form.specialTerms} onChange={(e) => updateForm("specialTerms", e.target.value)} rows={2} />
+              <Textarea value={form.specialTerms} onChange={(e) => updateForm("specialTerms", e.target.value)} rows={8} />
             </div>
           </div>
           <DialogFooter>
