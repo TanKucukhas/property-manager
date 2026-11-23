@@ -5,6 +5,7 @@ import { propertySchema } from "@/lib/validations";
 import { getSession } from "@/lib/auth";
 import { eq } from "drizzle-orm";
 import { syncListingWithStatus } from "@/lib/listings";
+import { rescorePropertyApplicants } from "@/lib/rescore";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
@@ -35,7 +36,9 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   await db.update(properties).set({ ...parsed.data, updatedAt: new Date().toISOString() }).where(eq(properties.id, propertyId)).run();
   // available -> other closes the current listing round; other -> available opens a new one.
   await syncListingWithStatus(db, propertyId, existing.status, parsed.data.status);
-  return NextResponse.json({ success: true });
+  // Rent, income multiplier or rules may have changed — keep application scores in step.
+  const rescored = await rescorePropertyApplicants(db, propertyId);
+  return NextResponse.json({ success: true, rescored });
 }
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
